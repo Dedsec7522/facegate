@@ -26,7 +26,8 @@ class Page(BaseModel, Generic[T]):
 
 # ---- auth -------------------------------------------------------------------------------
 class LoginIn(BaseModel):
-    email: EmailStr
+    identifier: str | None = Field(default=None, max_length=255)  # email or username
+    email: str | None = Field(default=None, max_length=255)  # legacy alias
     password: str = Field(min_length=8, max_length=128)
     totp_code: str | None = Field(default=None, max_length=8)
 
@@ -34,6 +35,7 @@ class LoginIn(BaseModel):
 class UserOut(ORM):
     id: str
     email: str
+    username: str | None = None
     role: str
     mfa_enabled: bool
     employee_id: str | None = None

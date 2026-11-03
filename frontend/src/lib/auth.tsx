@@ -30,7 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => { void refresh() }, [refresh])
 
   const login = useCallback(async (email: string, password: string, totp?: string) => {
-    const u = await api.post<User>('/auth/login', { email, password, totp_code: totp || undefined })
+    const u = await api.post<User>('/auth/login', { identifier: email, password, totp_code: totp || undefined })
     setUser(u)
     return u
   }, [])

@@ -10,3 +10,4 @@ backend/tests/data/*.jpg
 backend/models/*.pth
 deploy/certs/
 .pytest_cache/
+.env.local

@@ -160,7 +160,7 @@ class SessionManager:
             if a.embedding is not None:
                 s.embeddings.append(a.embedding)
 
-        live_avg = float(np.mean(s.live_probs)) if s.live_probs else 0.0
+        live_avg = float(np.median(s.live_probs)) if s.live_probs else 0.0  # median: robust to a few bad frames
         resp.update(
             {
                 "liveness": {"frames": len(s.live_probs), "needed": settings.pad_min_frames, "score": round(live_avg, 3),
@@ -173,7 +173,7 @@ class SessionManager:
 
         enough_pad = len(s.live_probs) >= settings.pad_min_frames
         enough_emb = len(s.embeddings) >= settings.embed_min_frames
-        if enough_pad and live_avg < s.pad_threshold and len(s.live_probs) >= settings.pad_min_frames * 2:
+        if enough_pad and live_avg < s.pad_threshold and len(s.live_probs) >= settings.pad_reject_min_frames:
             return self._finish(s, {"state": "rejected", "reason": "spoof", "message": "Liveness check failed. Please use the live camera, not a photo or screen.",
                                     "liveness_score": live_avg})
         if s.challenge_state == "failed":
@@ -261,7 +261,7 @@ class SessionManager:
                                  "just_captured": target}
         else:
             s.pose_hold[target] = 0
-        live_avg = float(np.mean(s.live_probs)) if s.live_probs else 0.0
+        live_avg = float(np.median(s.live_probs)) if s.live_probs else 0.0
         resp["liveness"] = {"frames": len(s.live_probs), "score": round(live_avg, 3), "passed": len(s.live_probs) >= settings.pad_min_frames and live_avg >= s.pad_threshold}
         resp["state"] = "complete" if len(s.poses) == len(ENROL_POSES) else "collecting"
         return resp

@@ -4,7 +4,7 @@
 
 | Area | Control | Where |
 |---|---|---|
-| Passwords | Argon2id (64 MiB, t=3), constant-time compare, dummy verify for unknown emails | `app/core/security.py`, `api/v1/auth.py` |
+| Passwords | Argon2id (64 MiB, t=3), constant-time compare, dummy verify for unknown identifiers; login accepts username **or** email; the seeded `admin` / `Welcome123` account must be changed on first login | `app/core/security.py`, `api/v1/auth.py` |
 | Lockout | 5 failed logins → 15-minute lock; per-IP login limiter 10/min (and Nginx 5/min) | `auth.py`, `core/rate_limit.py`, `deploy/nginx` |
 | MFA | TOTP (RFC 6238) with QR provisioning; secret stored AES-GCM encrypted; required at login once enabled | `auth.py` |
 | Sessions | 15-min access JWT + 7-day rotating refresh token (only SHA-256 hash stored, revocable); HttpOnly, Secure, SameSite=Strict cookies | `auth.py`, `refresh_sessions` table |
@@ -12,7 +12,7 @@
 | Biometric templates | 128-float vectors encrypted with AES-256-GCM (`TEMPLATE_KEY`, AAD = template id); decrypted only into process memory; never returned by any API | `core/crypto.py`, `services/index.py` |
 | Image minimisation | Frames are processed in memory and discarded; only one 112×112 aligned thumbnail per active enrolment is retained (toggle `KEEP_ENROL_THUMBNAIL`) | `services/enrolment.py` |
 | Replay / injection | Server nonce per session, frame-rate cap, session TTL 120 s, embedding consistency check across frames, single-use verification token (JTI) bound to session + employee, 90 s TTL | `services/verification.py`, `api/v1/attendance.py` |
-| Liveness | Passive PAD (two MiniFASNet models) averaged over ≥4 frames + server-chosen head-turn challenge; both must pass before matching | `services/verification.py` |
+| Liveness | Passive PAD (two MiniFASNet models), median over ≥4 frames against a per-site threshold (default 0.55, see docs/05 §5) + server-chosen head-turn challenge; both must pass before matching; rejection needs ≥14 frames of evidence | `services/verification.py` |
 | Identification | Accept threshold + margin to the second-best identity → `ambiguous` rather than a guess; inactive employees are removed from the index immediately | `vision/matcher.py`, `employees.py` |
 | Audit | Append-only `audit_log` for every admin action (before/after JSON, actor, IP); every verification attempt (success or failure) in `verification_attempts` | `services/audit.py` |
 | Corrections | Original events are never mutated; corrections void + add with mandatory reason and actor | `services/attendance.py` |

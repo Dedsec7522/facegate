@@ -31,7 +31,7 @@ export default function Kiosk() {
   const [recorded, setRecorded] = useState<AttendanceEvent | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [busyAction, setBusyAction] = useState<AttendanceAction | null>(null)
-  const cameraOn = screen === 'scanning' || screen === 'identified' || screen === 'welcome'
+  const cameraOn = screen !== 'pin'  // keep the camera warm so 'Try again' is instant
   const cam = useCamera(cameraOn)
   const [clock, setClock] = useState(new Date())
   useEffect(() => { const t = setInterval(() => setClock(new Date()), 1000); return () => clearInterval(t) }, [])

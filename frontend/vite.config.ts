@@ -1,13 +1,14 @@
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 
-export default defineConfig({
+// FACEGATE_API_URL (e.g. in frontend/.env.local) points the dev proxy at a non-default API port.
+export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss()],
   server: {
     port: 5173,
     proxy: {
-      '/api': { target: 'http://127.0.0.1:8000', changeOrigin: true, ws: true },
+      '/api': { target: loadEnv(mode, process.cwd(), 'FACEGATE_').FACEGATE_API_URL || 'http://127.0.0.1:8000', changeOrigin: true, ws: true },
     },
   },
   build: {
@@ -22,4 +23,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))

@@ -10,6 +10,7 @@ import numpy as np
 from app.core.config import settings
 
 YUNET_FILE = "face_detection_yunet_2023mar.onnx"
+cv2.ocl.setUseOpenCL(False)  # CPU only: never dispatch to OpenCL/GPU
 
 
 @dataclass(slots=True)

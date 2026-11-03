@@ -53,13 +53,13 @@ export default function Login() {
         <motion.div variants={popVariants} initial="hidden" animate="show" className="w-full max-w-sm">
           <Link to="/" className="mb-8 inline-flex items-center gap-1.5 text-sm text-ink-3 hover:text-ink lg:hidden"><ArrowLeft className="size-4" /> Back</Link>
           <h1 className="text-2xl font-semibold">Sign in</h1>
-          <p className="mt-1 text-sm text-ink-3">Use your work email and password.</p>
+          <p className="mt-1 text-sm text-ink-3">Use your username or work email, and your password.</p>
 
           <form onSubmit={submit} className="mt-6 space-y-4" noValidate>
             <AnimatePresence mode="wait" initial={false}>
               {step === 'credentials' ? (
                 <motion.div key="cred" className="space-y-4" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.18 }}>
-                  <Input label="Email" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus placeholder="you@company.com" />
+                  <Input label="Username or email" type="text" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus placeholder="admin or you@company.com" />
                   <Input label="Password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
                 </motion.div>
               ) : (

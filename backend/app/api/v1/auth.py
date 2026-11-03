@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 import qrcode
 import qrcode.image.svg
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -49,14 +49,17 @@ async def _user_out(db: AsyncSession, user: UserAccount) -> UserOut:
     if user.employee_id:
         emp = await db.get(Employee, user.employee_id)
         name = emp.full_name if emp else None
-    return UserOut(id=user.id, email=user.email, role=user.role.value, mfa_enabled=user.mfa_enabled, employee_id=user.employee_id, employee_name=name)
+    return UserOut(id=user.id, email=user.email, username=user.username, role=user.role.value, mfa_enabled=user.mfa_enabled, employee_id=user.employee_id, employee_name=name)
 
 
 @router.post("/login", response_model=UserOut, dependencies=[Depends(limit(login_limiter))])
 async def login(body: LoginIn, request: Request, response: Response, db: AsyncSession = Depends(get_db)):
-    user = (await db.execute(select(UserAccount).where(UserAccount.email == body.email.lower()))).scalar_one_or_none()
+    ident = (body.identifier or body.email or "").strip().lower()
+    if not ident:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Email or username is required")
+    user = (await db.execute(select(UserAccount).where(or_(UserAccount.email == ident, UserAccount.username == ident)))).scalar_one_or_none()
     now = datetime.now(timezone.utc)
-    generic = HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
+    generic = HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid username/email or password")
     if user is None:
         verify_password(body.password, _DUMMY_HASH)  # keep timing similar for unknown emails
         raise generic

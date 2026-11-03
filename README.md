@@ -18,7 +18,7 @@ Documentation: [reference analysis](docs/01-reference-analysis.md) · [architect
 Prerequisites: Python 3.12+, Node 20+, Docker (for Postgres), a webcam.
 
 ```bash
-docker run -d --name facegate-pg -e POSTGRES_USER=facegate -e POSTGRES_PASSWORD=facegate -e POSTGRES_DB=facegate -p 5432:5432 postgres:16-alpine
+docker run -d --name facegate-pg -v facegate-pgdata:/var/lib/postgresql/data -e POSTGRES_USER=facegate -e POSTGRES_PASSWORD=facegate -e POSTGRES_DB=facegate -p 5432:5432 postgres:16-alpine
 ```
 
 ```bash
@@ -27,7 +27,7 @@ python -m venv .venv && .venv/Scripts/activate        # source .venv/bin/activat
 pip install -r requirements.txt
 cp .env.example .env                                  # defaults work for local dev
 alembic upgrade head
-python tools/seed.py --demo --admin-email admin@facegate.local --admin-password 'Admin-Password-2026!'
+python tools/seed.py --demo            # creates admin  username: admin  password: Welcome123  (change it after first login)
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -35,7 +35,7 @@ uvicorn app.main:app --reload --port 8000
 cd frontend && npm install && npm run dev            # http://localhost:5173 (proxies /api to :8000)
 ```
 
-Then open http://localhost:5173 → **Administrator sign-in** with the seeded account → *Employees* → pick someone → **Enrol face** → open the **kiosk** and check in.
+Then open http://localhost:5173 → **Administrator sign-in** with username `admin` / password `Welcome123` (or the email `admin@facegate.local`) → *Employees* → pick someone → **Enrol face** → open the **kiosk** and check in.
 
 PAD models: `backend/models/minifasnet_*.onnx` are committed. To regenerate them from the vendor checkpoints run `tools/export_pad_onnx.py` with a separate venv that has `torch` (see the script header).
 
@@ -47,7 +47,7 @@ cp .env.example .env            # set PUBLIC_HOST, POSTGRES_PASSWORD, SECRET_KEY
 mkdir -p certs backups          # put fullchain.pem + privkey.pem in certs/ (Let's Encrypt or your CA)
 docker compose up -d --build
 docker compose exec api alembic upgrade head
-docker compose exec api python tools/seed.py --admin-email you@company.com --admin-password 'a-strong-password'
+docker compose exec api python tools/seed.py --admin-username admin --admin-email you@company.com --admin-password 'a-strong-password'
 ```
 
 - Nginx terminates TLS on 443, serves the SPA, proxies `/api` (HTTP + WebSocket) and rate-limits logins.
@@ -82,8 +82,10 @@ All settings are environment variables (see `backend/.env.example`). Attendance 
 |---|---|---|
 | `MATCH_ACCEPT_THRESHOLD` | 0.42 | cosine similarity required to identify; below → `unknown` |
 | `MATCH_MARGIN` | 0.08 | required gap to the second-best identity; smaller → `ambiguous` |
-| `PAD_LIVE_THRESHOLD` | 0.80 | mean live-probability over ≥ `PAD_MIN_FRAMES` frames |
-| `INFERENCE_WORKERS` | 4 | bounded CPU inference pool |
+| `PAD_LIVE_THRESHOLD` | 0.55 | median per-frame live-probability over ≥ `PAD_MIN_FRAMES` frames (vendor decision ≈ 0.5; raise for stricter anti-spoofing once calibrated on your cameras) |
+| `PAD_REJECT_MIN_FRAMES` | 14 | frames of evidence before a session is rejected as spoof |
+| `INFERENCE_DEVICE` | cpu | CPU only — no GPU is used or required |
+| `INFERENCE_WORKERS` | 4 | bounded CPU inference pool (set to the number of cores) |
 | `KEEP_ENROL_THUMBNAIL` | true | keep one 112 px aligned thumbnail per enrolment for admins |
 | `VERIFY_SESSIONS_PER_MINUTE` | 120 | per-IP kiosk session limit |
 

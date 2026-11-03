@@ -36,11 +36,13 @@ class Settings(BaseSettings):
     # Vision
     models_dir: Path = BACKEND_DIR / "models"
     inference_workers: int = 4
+    inference_device: str = "cpu"  # ONNX Runtime + OpenCV on CPU only; no GPU is used or required
     detector_score_threshold: float = 0.8
     match_accept_threshold: float = 0.40
     match_margin: float = 0.08
     duplicate_enrol_threshold: float = 0.55
-    pad_live_threshold: float = 0.80
+    pad_live_threshold: float = 0.55  # median per-frame live-probability; the vendor decision is argmax (~0.5). Calibrate per camera.
+    pad_reject_min_frames: int = 14  # frames of evidence required before a session is rejected as spoof
     pad_min_frames: int = 4
     embed_min_frames: int = 3
     min_face_size: int = 110

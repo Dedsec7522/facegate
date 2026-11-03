@@ -25,7 +25,7 @@ class EnrolmentError(Exception):
 async def commit_enrolment(db: AsyncSession, s: Session, *, employee: Employee, created_by: str | None, notes: str | None = None) -> BiometricEnrolment:
     if len(s.poses) < 3:
         raise EnrolmentError("incomplete", "At least three poses must be captured before saving.")
-    live_avg = float(np.mean(s.live_probs)) if s.live_probs else 0.0
+    live_avg = float(np.median(s.live_probs)) if s.live_probs else 0.0
     if len(s.live_probs) < settings.pad_min_frames or live_avg < s.pad_threshold:
         raise EnrolmentError("liveness", f"Liveness during enrolment was too low ({live_avg:.2f}). Use the live camera.")
 

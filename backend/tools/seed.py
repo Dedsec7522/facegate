@@ -1,6 +1,7 @@
 """Create the first administrator, sample departments and employees (no biometrics).
 
-    .venv/Scripts/python tools/seed.py --admin-email admin@example.com --admin-password 'ChangeMe-Now-2026'
+    .venv/Scripts/python tools/seed.py                      # default admin: username 'admin', password 'Welcome123'
+    .venv/Scripts/python tools/seed.py --admin-username ops --admin-email ops@example.com --admin-password 'ChangeMe-Now-2026'
     .venv/Scripts/python tools/seed.py --demo        # also adds 12 demo employees across 4 departments
 """
 from __future__ import annotations
@@ -31,12 +32,16 @@ DEMO_EMPLOYEES = [
 
 async def main(args: argparse.Namespace) -> None:
     async with SessionLocal() as db:
-        existing = (await db.execute(select(UserAccount).where(UserAccount.email == args.admin_email.lower()))).scalar_one_or_none()
+        existing = (await db.execute(select(UserAccount).where((UserAccount.email == args.admin_email.lower()) | (UserAccount.username == args.admin_username.lower())))).scalar_one_or_none()
         if existing is None:
-            db.add(UserAccount(email=args.admin_email.lower(), password_hash=hash_password(args.admin_password), role=Role.admin))
-            print(f"created admin {args.admin_email}")
+            db.add(UserAccount(email=args.admin_email.lower(), username=args.admin_username.lower(), password_hash=hash_password(args.admin_password), role=Role.admin))
+            print(f"created admin username={args.admin_username} email={args.admin_email}")
         else:
-            print("admin already exists")
+            existing.username = existing.username or args.admin_username.lower()
+            if args.reset_password:
+                existing.password_hash = hash_password(args.admin_password)
+                print("admin password reset")
+            print(f"admin already exists (username={existing.username})")
         if args.demo:
             deps = {d.code: d for d in (await db.execute(select(Department))).scalars()}
             for name, code in DEMO_DEPS:
@@ -58,7 +63,9 @@ async def main(args: argparse.Namespace) -> None:
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
+    p.add_argument("--admin-username", default="admin")
     p.add_argument("--admin-email", default="admin@facegate.local")
-    p.add_argument("--admin-password", default="Admin-Password-2026!")
+    p.add_argument("--admin-password", default="Welcome123")
+    p.add_argument("--reset-password", action="store_true", help="overwrite the existing admin's password")
     p.add_argument("--demo", action="store_true")
     asyncio.run(main(p.parse_args()))

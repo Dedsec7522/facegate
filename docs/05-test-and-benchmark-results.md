@@ -64,7 +64,11 @@ Interpretation: a 4-core laptop degrades gracefully (no data loss, no wrong deci
 
 Before the fix recorded in this document (per-IP session limiter at 30/min and JPEG decode on the event loop) the same scenario produced 244 HTTP 429s and 26 connect timeouts; both were corrected (limiter now 120/min per client IP and configurable, decode moved to the inference pool).
 
-## 5. Pending manual trials (require a physical camera and a person)
+## 5. First live webcam trial (2026-11-03, developer's laptop camera)
+
+Six genuine attempts were made at the kiosk before any enrolment existed. Outcome: 1 × `unknown` (correct — nobody enrolled; liveness 0.84, head-turn passed, 38 frames / 6.4 s) and **5 × `spoof` with liveness 0.57–0.80**. The passive PAD models score a real face on this webcam between ~0.55 and ~0.85, so the original 0.80 *mean* threshold was mis-calibrated and the session rejected after only 8 frames. Fix applied: decision uses the **median** per-frame score, default threshold **0.55** (the vendor's own decision is argmax ≈ 0.5), and a session needs ≥ 14 frames of evidence before it is rejected. This is a calibration, not a weakening of the challenge: the head-turn gate is unchanged, and the threshold remains admin-tunable per site.
+
+## 6. Pending manual trials (require a physical camera and a person)
 
 These were **not** executed by the automated run and are not claimed:
 

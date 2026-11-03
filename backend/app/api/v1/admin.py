@@ -142,5 +142,5 @@ async def audit_log(action: str | None = None, actor: str | None = None, page: i
 @router.get("/users")
 async def list_users(db: AsyncSession = Depends(get_db), _=Depends(require_admin)):
     rows = (await db.execute(select(UserAccount).order_by(UserAccount.email))).scalars().all()
-    return [{"id": u.id, "email": u.email, "role": u.role.value, "is_active": u.is_active, "mfa_enabled": u.mfa_enabled, "employee_id": u.employee_id,
+    return [{"id": u.id, "email": u.email, "username": u.username, "role": u.role.value, "is_active": u.is_active, "mfa_enabled": u.mfa_enabled, "employee_id": u.employee_id,
              "last_login_at": u.last_login_at, "locked_until": u.locked_until} for u in rows]
