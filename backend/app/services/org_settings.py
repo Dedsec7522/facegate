@@ -43,7 +43,7 @@ def defaults() -> OrgSettings:
         auto_close_after_hours=settings.auto_close_after_hours,
         match_accept_threshold=settings.match_accept_threshold,
         pad_live_threshold=settings.pad_live_threshold,
-        require_challenge=True,
+        require_challenge=False,  # fast passive liveness by default; the head-turn is a step-up when evidence is uncertain
         adaptive_templates=True,
         consent_version="2026-11",
     )

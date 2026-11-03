@@ -7,9 +7,9 @@ export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return <div className={cn('card', className)} {...props} />
 }
 
-export function MotionCard({ className, children }: { className?: string; children: ReactNode }) {
+export function MotionCard({ className, children, interactive }: { className?: string; children: ReactNode; interactive?: boolean }) {
   return (
-    <motion.div variants={itemVariants} className={cn('card', className)}>
+    <motion.div variants={itemVariants} whileHover={interactive ? { y: -2, boxShadow: '0 12px 30px -12px rgb(15 23 42 / 0.25)' } : undefined} transition={{ type: 'spring', stiffness: 400, damping: 30 }} className={cn('card', className)}>
       {children}
     </motion.div>
   )

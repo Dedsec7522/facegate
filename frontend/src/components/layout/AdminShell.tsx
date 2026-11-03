@@ -7,6 +7,7 @@ import { cn } from '../../lib/cn'
 import { pageVariants, spring } from '../../lib/motion'
 import { Avatar } from '../ui/Misc'
 import { Logo } from './Logo'
+import { ThemeToggle } from './ThemeToggle'
 
 const nav = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -54,6 +55,7 @@ export function AdminShell() {
         </div>
       </nav>
       <div className="border-t border-line p-3">
+        <div className="mb-1 flex items-center justify-between px-2"><span className="text-xs text-ink-3">Appearance</span><ThemeToggle /></div>
         <div className="flex items-center gap-3 rounded-md px-2 py-2">
           <Avatar name={user?.employee_name ?? user?.email} size="sm" />
           <div className="min-w-0 flex-1">

@@ -61,6 +61,8 @@ class Session:
     embeddings: list[np.ndarray] = field(default_factory=list)
     yaw_history: list[float] = field(default_factory=list)
     challenge_state: str = "pending"  # pending | turned | passed | failed
+    stepped_up: bool = False  # challenge was added mid-session because passive evidence was uncertain
+    landmark_history: list[np.ndarray] = field(default_factory=list)
     done: bool = False
     result: dict | None = None
     token_used: bool = False
@@ -160,6 +162,8 @@ class SessionManager:
         q = a.quality
         yaw = q.yaw if q else 0.0
         s.yaw_history.append(yaw)
+        if a.face is not None:
+            s.landmark_history.append(a.face.landmarks.copy())
         self._advance_challenge(s, yaw)
 
         # Evidence is only collected while the face is roughly frontal (clean embeddings / PAD crops).
@@ -182,17 +186,34 @@ class SessionManager:
 
         enough_pad = len(s.live_probs) >= settings.pad_min_frames
         enough_emb = len(s.embeddings) >= settings.embed_min_frames
-        if enough_pad and live_avg < s.pad_threshold and len(s.live_probs) >= settings.pad_reject_min_frames:
+        # Step-up: passive evidence is neither clearly live nor clearly a spoof → ask for a head turn once.
+        if enough_pad and s.challenge is None and settings.pad_spoof_threshold <= live_avg < s.pad_threshold and len(s.live_probs) >= settings.pad_min_frames * 2:
+            s.challenge = secrets.choice(CHALLENGES)
+            s.challenge_state = "pending"
+            s.stepped_up = True
+            resp["challenge"] = {"name": s.challenge, "state": s.challenge_state, "text": CHALLENGE_TEXT[s.challenge]}
+        # A frozen or injected stream shows no natural micro-motion at all; a real face always does.
+        if len(s.landmark_history) >= 8 and self._motion_px(s) < 0.35:
+            return self._finish(s, {"state": "rejected", "reason": "spoof", "message": "No natural movement was detected. Please use the live camera.", "liveness_score": live_avg})
+        passive_ok = enough_pad and live_avg >= s.pad_threshold
+        stepup_ok = s.stepped_up and s.challenge_state == "passed" and live_avg >= settings.pad_spoof_threshold
+        if enough_pad and live_avg < settings.pad_spoof_threshold and len(s.live_probs) >= settings.pad_reject_min_frames:
             return self._finish(s, {"state": "rejected", "reason": "spoof", "message": "Liveness check failed. Please use the live camera, not a photo or screen.",
                                     "liveness_score": live_avg})
         if s.challenge_state == "failed":
             return self._finish(s, {"state": "rejected", "reason": "challenge_failed", "message": "Head-turn check was not completed.", "liveness_score": live_avg})
-        if enough_pad and live_avg >= s.pad_threshold and s.challenge_state == "passed" and enough_emb:
+        if enough_emb and (passive_ok or stepup_ok) and (s.stepped_up or s.challenge_state == "passed"):
             return self._identify(s, live_avg)
         if s.age > settings.verify_session_ttl_seconds - 5:
             return self._finish(s, {"state": "rejected", "reason": "timeout", "message": "Verification timed out. Please try again.", "liveness_score": live_avg})
         resp["state"] = "collecting"
         return resp
+
+    @staticmethod
+    def _motion_px(s: Session) -> float:
+        """Mean per-landmark standard deviation (pixels) over the session's recent frames."""
+        arr = np.stack(s.landmark_history[-12:])
+        return float(arr.std(axis=0).mean())
 
     def _advance_challenge(self, s: Session, yaw: float) -> None:
         if s.challenge is None or s.challenge_state in ("passed", "failed"):

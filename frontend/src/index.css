@@ -72,7 +72,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root[data-theme="system"] {
     --surface: #0f172a;
     --surface-2: #131d31;
     --surface-3: #192438;
@@ -148,12 +148,10 @@
     scrollbar-width: thin;
     scrollbar-color: var(--line-2) transparent;
   }
-  .grid-fade {
-    background-image:
-      linear-gradient(to right, rgb(255 255 255 / 0.05) 1px, transparent 1px),
-      linear-gradient(to bottom, rgb(255 255 255 / 0.05) 1px, transparent 1px);
-    background-size: 32px 32px;
-    mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+  .glow-fade {
+    background:
+      radial-gradient(60% 50% at 30% 20%, rgb(52 211 153 / 0.14), transparent 70%),
+      radial-gradient(50% 40% at 80% 80%, rgb(58 101 156 / 0.25), transparent 70%);
   }
 }
 

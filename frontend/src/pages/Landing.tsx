@@ -29,7 +29,7 @@ export default function Landing() {
       </header>
 
       <section className="relative overflow-hidden">
-        <div className="grid-fade pointer-events-none absolute inset-0" aria-hidden />
+        <div className="glow-fade pointer-events-none absolute inset-0" aria-hidden />
         <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-6 pb-20 pt-10 md:grid-cols-[1.1fr_0.9fr] md:pt-16">
           <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.25, 1, 0.5, 1] }}>
             <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-line-2 px-3 py-1 text-xs font-medium text-ink-2">

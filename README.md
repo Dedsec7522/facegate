@@ -82,7 +82,8 @@ All settings are environment variables (see `backend/.env.example`). Attendance 
 |---|---|---|
 | `MATCH_ACCEPT_THRESHOLD` | 0.42 | cosine similarity required to identify; below → `unknown` |
 | `MATCH_MARGIN` | 0.08 | required gap to the second-best identity; smaller → `ambiguous` |
-| `PAD_LIVE_THRESHOLD` | 0.55 | median per-frame live-probability over ≥ `PAD_MIN_FRAMES` frames (vendor decision ≈ 0.5; raise for stricter anti-spoofing once calibrated on your cameras) |
+| `PAD_LIVE_THRESHOLD` | 0.50 | median live-probability that passes on passive evidence alone (typical live check ≈ 0.5–1 s) |
+| `PAD_SPOOF_THRESHOLD` | 0.20 | below this the session is rejected; between the two thresholds the server asks for a one-off head turn (step-up) |
 | `PAD_REJECT_MIN_FRAMES` | 14 | frames of evidence before a session is rejected as spoof |
 | `INFERENCE_DEVICE` | cpu | CPU only — no GPU is used or required |
 | `INFERENCE_WORKERS` | 4 | bounded CPU inference pool (set to the number of cores) |

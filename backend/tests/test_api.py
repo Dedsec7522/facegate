@@ -80,4 +80,4 @@ async def test_verify_session_creation_is_public_and_rate_limited(client: AsyncC
     r = await client.post("/api/v1/verify/sessions")
     assert r.status_code == 200
     body = r.json()
-    assert body["challenge"] in ("turn_left", "turn_right") and body["nonce"]
+    assert body["challenge"] in ("turn_left", "turn_right", None) and body["nonce"]  # challenge is a step-up by default

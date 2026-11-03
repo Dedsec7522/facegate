@@ -39,7 +39,7 @@ export default function Login() {
   return (
     <div className="grid min-h-dvh lg:grid-cols-[1fr_1fr]">
       <div className="theme-dark relative hidden overflow-hidden bg-surface p-10 text-ink lg:flex lg:flex-col lg:justify-between">
-        <div className="grid-fade pointer-events-none absolute inset-0" aria-hidden />
+        <div className="glow-fade pointer-events-none absolute inset-0" aria-hidden />
         <Link to="/" className="relative flex items-center gap-2.5"><Logo className="size-8" /><span className="font-semibold">FaceGate</span></Link>
         <div className="relative max-w-md">
           <ShieldCheck className="mb-4 size-8 text-accent-400" aria-hidden />

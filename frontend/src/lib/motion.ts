@@ -15,9 +15,9 @@ export const spring = {
 export const duration = { fast: 0.15, base: 0.24, slow: 0.4 }
 
 export const pageVariants: Variants = {
-  initial: { opacity: 0, y: 8 },
-  enter: { opacity: 1, y: 0, transition: { duration: duration.base, ease: ease.out } },
-  exit: { opacity: 0, y: -6, transition: { duration: duration.fast, ease: ease.inOut } },
+  initial: { opacity: 0, y: 10, scale: 0.995 },
+  enter: { opacity: 1, y: 0, scale: 1, transition: { type: 'spring', visualDuration: 0.32, bounce: 0 } },
+  exit: { opacity: 0, y: -6, scale: 0.995, transition: { duration: duration.fast, ease: ease.inOut } },
 }
 
 export const listVariants: Variants = {
