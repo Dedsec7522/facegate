@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import numpy as np
-from sqlalchemy import select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -117,12 +117,11 @@ async def revoke_enrolments(db: AsyncSession, employee_id: str) -> int:
 
 
 async def purge_biometrics(db: AsyncSession, employee_id: str) -> int:
-    """Hard-deletes all templates and thumbnails for an employee (retention / erasure requests)."""
-    enrols = (await db.execute(select(BiometricEnrolment).where(BiometricEnrolment.employee_id == employee_id))).scalars().all()
-    n = 0
-    for e in enrols:
-        n += len(e.templates)
-        await db.delete(e)
+    """Hard-deletes all templates and thumbnails for an employee (retention / erasure requests).
+    Uses bulk statements: touching the lazy `templates` relationship from async code raises MissingGreenlet."""
+    n = (await db.execute(select(func.count(FaceTemplate.id)).where(FaceTemplate.employee_id == employee_id))).scalar_one()
+    await db.execute(delete(FaceTemplate).where(FaceTemplate.employee_id == employee_id))
+    await db.execute(delete(BiometricEnrolment).where(BiometricEnrolment.employee_id == employee_id))
     await db.flush()
     await rebuild_index(db)
-    return n
+    return int(n)
