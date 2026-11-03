@@ -1,0 +1,12 @@
+.venv/
+.venv-export/
+__pycache__/
+*.pyc
+.env
+node_modules/
+dist/
+*.log
+backend/tests/data/*.jpg
+backend/models/*.pth
+deploy/certs/
+.pytest_cache/
