@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -112,6 +112,13 @@ async def get_settings_(db: AsyncSession = Depends(get_db), _=Depends(require_st
 @router.patch("/settings")
 async def patch_settings(body: SettingsPatch, request: Request, db: AsyncSession = Depends(get_db), user: UserAccount = Depends(require_admin)):
     patch = body.model_dump(exclude_unset=True)
+    if patch.get("timezone"):
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+        try:
+            ZoneInfo(patch["timezone"])
+        except (ZoneInfoNotFoundError, ValueError):
+            raise HTTPException(422, f"Unknown timezone '{patch['timezone']}' — use an IANA name such as Europe/London")
     org = await update_org_settings(db, patch, user.id)
     await audit(db, "settings.update", actor=user, target_type="settings", detail=patch, request=request)
     await db.commit()

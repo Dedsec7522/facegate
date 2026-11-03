@@ -1,0 +1,94 @@
+# FaceGate — self-hosted deployment (Ubuntu + Docker Compose)
+#   cp .env.example .env && edit secrets
+#   docker compose up -d --build
+#   docker compose exec api alembic upgrade head
+#   docker compose exec api python tools/seed.py --admin-email you@company.com --admin-password '...'
+name: facegate
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-facegate}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-facegate}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-facegate} -d ${POSTGRES_DB:-facegate}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [internal]
+
+  api:
+    build:
+      context: ../backend
+      dockerfile: ../deploy/api.Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-facegate}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-facegate}
+      ENVIRONMENT: production
+      COOKIE_SECURE: "true"
+      CORS_ORIGINS: '["https://${PUBLIC_HOST}"]'
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/api/health',timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "${API_CPUS:-4}"
+          memory: 2g
+    networks: [internal]
+
+  web:
+    build:
+      context: ../frontend
+      dockerfile: ../deploy/web.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/proxy_params_facegate:/etc/nginx/proxy_params_facegate:ro
+      - ./certs:/etc/nginx/certs:ro
+    networks: [internal]
+
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    entrypoint: ["/bin/sh", "-c"]
+    # Nightly logical backup, 14-day retention. Restore: gunzip -c file.sql.gz | psql -h db -U facegate facegate
+    command:
+      - |
+        while true; do
+          pg_dump -h db -U ${POSTGRES_USER:-facegate} ${POSTGRES_DB:-facegate} | gzip > /backups/facegate_$$(date +%Y%m%d_%H%M).sql.gz
+          find /backups -name 'facegate_*.sql.gz' -mtime +14 -delete
+          sleep 86400
+        done
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [internal]
+
+volumes:
+  pgdata:
+
+networks:
+  internal:
