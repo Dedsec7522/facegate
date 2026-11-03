@@ -128,7 +128,7 @@ export default function EmployeeDetail() {
       </div>
 
       <Card className="mt-4">
-        <CardHeader title="Recent attendance" description="Last 14 recorded days" action={<Link to={`/admin/attendance?employee_id=${e.id}`} className="text-sm text-brand-600 hover:underline">View all</Link>} />
+        <CardHeader title="Recent attendance" description="Last 14 recorded days" action={<Link to={`/admin/attendance?employee_id=${e.id}`} className="text-sm text-brand-600 dark:text-brand-300 hover:underline">View all</Link>} />
         {days.isLoading ? <Skeleton className="mx-5 mb-5 h-32" /> : !days.data?.items.length ? <EmptyState title="No attendance recorded yet" /> : (
           <Table>
             <thead><tr><Th>Date</Th><Th>First in</Th><Th>Last out</Th><Th>Worked</Th><Th>Late</Th><Th>Status</Th></tr></thead>

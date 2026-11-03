@@ -15,7 +15,7 @@ from app.db.models import Employee, EmployeeStatus, Role, UserAccount, Verificat
 from app.services.enrolment import EnrolmentError, commit_enrolment
 from app.services.org_settings import get_org_settings
 from app.services.verification import manager
-from app.vision.pipeline import decode_jpeg, get_pipeline
+from app.vision.pipeline import get_pipeline
 from app.services.audit import audit
 
 router = APIRouter(prefix="/verify", tags=["verify"])
@@ -85,7 +85,7 @@ async def stream(ws: WebSocket, session_id: str):
             if pipe.busy:
                 await ws.send_json({"state": "busy", "guidance": "The system is busy — hold still", "frame": s.frames})
                 continue
-            bgr = decode_jpeg(data)
+            bgr = await pipe.decode_async(data)
             if bgr is None:
                 await ws.send_json({"state": "error", "message": "Bad frame"})
                 continue
@@ -160,7 +160,7 @@ async def enrol_stream(ws: WebSocket, session_id: str):
             if pipe.busy:
                 await ws.send_json({"state": "busy", "guidance": "The system is busy — hold still", "frame": s.frames})
                 continue
-            bgr = decode_jpeg(data)
+            bgr = await pipe.decode_async(data)
             if bgr is None:
                 continue
             s.created = max(s.created, time.monotonic() - 60)  # keep an active enrolment session alive

@@ -8,6 +8,8 @@ from threading import Lock
 
 from fastapi import HTTPException, Request, status
 
+from app.core.config import settings
+
 
 class RateLimiter:
     def __init__(self, limit: int, window_seconds: float) -> None:
@@ -33,7 +35,7 @@ class RateLimiter:
 
 
 login_limiter = RateLimiter(limit=10, window_seconds=60)
-verify_session_limiter = RateLimiter(limit=30, window_seconds=60)
+verify_session_limiter = RateLimiter(limit=settings.verify_sessions_per_minute, window_seconds=60)
 generic_limiter = RateLimiter(limit=300, window_seconds=60)
 
 

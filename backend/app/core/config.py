@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     embed_min_frames: int = 3
     min_face_size: int = 110
     max_stream_fps: float = 8.0
+    verify_sessions_per_minute: int = 120  # per client IP; raise behind a shared office NAT
     keep_enrol_thumbnail: bool = True
 
     # Attendance defaults (overridable in app_settings table)

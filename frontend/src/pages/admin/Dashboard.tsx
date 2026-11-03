@@ -162,7 +162,7 @@ export default function Dashboard() {
                   <Users className="size-5 text-ink-2" aria-hidden />
                   <div className="text-sm">
                     <p className="font-medium">{d.kpis.enrolled} of {d.kpis.employees} enrolled</p>
-                    <p className="text-ink-3">{d.kpis.employees - d.kpis.enrolled > 0 ? <Link className="text-brand-600 hover:underline" to="/admin/employees?enrolled=false">{d.kpis.employees - d.kpis.enrolled} awaiting enrolment</Link> : 'Everyone is enrolled'}</p>
+                    <p className="text-ink-3">{d.kpis.employees - d.kpis.enrolled > 0 ? <Link className="text-brand-600 dark:text-brand-300 hover:underline" to="/admin/employees?enrolled=false">{d.kpis.employees - d.kpis.enrolled} awaiting enrolment</Link> : 'Everyone is enrolled'}</p>
                   </div>
                 </div>
               </CardBody>

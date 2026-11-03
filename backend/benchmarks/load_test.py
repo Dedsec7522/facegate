@@ -35,25 +35,39 @@ def load_frames(n: int) -> list[bytes]:
     return out
 
 
-async def one_client(idx: int, base: str, frames: list[bytes], results: dict, delay: float) -> None:
+async def one_client(idx: int, base: str, frames: list[bytes], results: dict, delay: float, gate: asyncio.Semaphore) -> None:
     await asyncio.sleep(delay)
+    async with gate:
+        await _run_client(idx, base, frames, results)
+
+
+async def _run_client(idx: int, base: str, frames: list[bytes], results: dict) -> None:
     t0 = time.perf_counter()
     frame_rtts: list[float] = []
+    busy = 0
     outcome = "error"
     msg: dict = {}
     try:
-        async with httpx.AsyncClient(base_url=base, timeout=30) as c:
+        # Each virtual client presents a distinct source address so per-IP limits behave as in production.
+        xff = {"X-Forwarded-For": f"10.{(idx // 65025) % 256}.{(idx // 255) % 255}.{idx % 255 + 1}"}
+        async with httpx.AsyncClient(base_url=base, timeout=30, headers=xff) as c:
             r = await c.post("/api/v1/verify/sessions")
             r.raise_for_status()
             s = r.json()
         ws_base = base.replace("http", "ws", 1)
         async with websockets.connect(f"{ws_base}/api/v1/verify/stream/{s['session_id']}", max_size=4 * 1024 * 1024) as ws:
             await ws.send(json.dumps({"nonce": s["nonce"]}))
-            for f in frames:
+            sent = 0
+            while sent < len(frames):
                 ts = time.perf_counter()
-                await ws.send(f)
+                await ws.send(frames[sent])
                 msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=60))
+                if msg.get("state") == "busy":  # server shed load: back off, do not count as processed
+                    busy += 1
+                    await asyncio.sleep(0.3)
+                    continue
                 frame_rtts.append((time.perf_counter() - ts) * 1000)
+                sent += 1
                 if msg.get("state") in ("identified", "rejected"):
                     outcome = msg["state"] + ":" + str(msg.get("reason", ""))
                     break
@@ -62,7 +76,7 @@ async def one_client(idx: int, base: str, frames: list[bytes], results: dict, de
                 outcome = "incomplete:" + str(msg.get("state"))
     except Exception as e:  # noqa: BLE001
         outcome = f"error:{type(e).__name__}"
-    results[idx] = {"outcome": outcome, "total_ms": (time.perf_counter() - t0) * 1000, "frame_rtts": frame_rtts}
+    results[idx] = {"outcome": outcome, "total_ms": (time.perf_counter() - t0) * 1000, "frame_rtts": frame_rtts, "busy": busy}
 
 
 def pct(xs: list[float], p: float) -> float:
@@ -76,7 +90,8 @@ async def main(a: argparse.Namespace) -> None:
     frames = load_frames(a.frames)
     results: dict[int, dict] = {}
     t0 = time.perf_counter()
-    await asyncio.gather(*(one_client(i, a.base, frames, results, (i / a.clients) * a.ramp) for i in range(a.clients)))
+    gate = asyncio.Semaphore(a.concurrency)
+    await asyncio.gather(*(one_client(i, a.base, frames, results, (i / a.clients) * a.ramp, gate) for i in range(a.clients)))
     wall = time.perf_counter() - t0
     totals = [r["total_ms"] for r in results.values()]
     rtts = [x for r in results.values() for x in r["frame_rtts"]]
@@ -95,5 +110,6 @@ if __name__ == "__main__":
     p.add_argument("--clients", type=int, default=50)
     p.add_argument("--ramp", type=float, default=5.0, help="seconds over which clients start")
     p.add_argument("--frames", type=int, default=10)
+    p.add_argument("--concurrency", type=int, default=10, help="max simultaneous sessions (number of kiosks)")
     p.add_argument("--base", default="http://127.0.0.1:8000")
     asyncio.run(main(p.parse_args()))

@@ -93,7 +93,7 @@ export default function Portal() {
                 <span className="grid size-10 place-items-center rounded-full bg-surface text-brand-700">{s.next.next === 'check_in' ? <LogIn className="size-5" /> : <LogOut className="size-5" />}</span>
                 <p className="text-ink-3">Next action</p>
                 <p className="font-medium">{s.next.next === 'check_in' ? 'Check in' : 'Check out'}</p>
-                <Link to="/kiosk" className="text-xs text-brand-600 hover:underline">Use the kiosk</Link>
+                <Link to="/kiosk" className="text-xs text-brand-600 dark:text-brand-300 hover:underline">Use the kiosk</Link>
               </div>
             </div>
           </motion.div>

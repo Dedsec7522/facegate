@@ -73,6 +73,10 @@ class VisionPipeline:
         async with self._sem:
             return await loop.run_in_executor(self.executor, lambda: self.analyse(bgr, **kw))
 
+    async def decode_async(self, data: bytes) -> np.ndarray | None:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(self.executor, decode_jpeg, data)
+
     @property
     def busy(self) -> bool:
         return self._sem.locked()
