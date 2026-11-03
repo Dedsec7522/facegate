@@ -51,7 +51,16 @@ A full verification needs ≥ 4 PAD frames, ≥ 3 embeddings and the head turn: 
 
 Interpretation: 300 employees arriving over a 30-minute window is ~10 sessions/min — a tenth of what this 4-core laptop sustained — so the morning peak is well within budget. Ten kiosks verifying at the same instant raise per-frame latency from 40 ms to ~150 ms (p50), which a user perceives as slightly slower frame feedback, not as failure.
 
-**Scenario B — 300 sessions started within 5 s (worst case, every employee on their own phone at once):** see the appended block below.
+**Scenario B — 300 sessions started within 5 s (worst case, every employee on their own phone at once), same laptop:**
+
+| Metric | Value |
+|---|---|
+| Sessions that streamed to completion | 256 / 300 (all 8 frames processed, no crashes, server health endpoint stayed responsive) |
+| Session creations that timed out (30 s client timeout) | **44** — the single event loop was saturated by 300 concurrent WebSocket streams |
+| Per-frame round trip | p50 766 ms · p90 1 312 ms · p95 1 543 ms · p99 1 974 ms |
+| Session (8 frames) | p50 130 s (clients back off on `busy` replies) |
+
+Interpretation: a 4-core laptop degrades gracefully (no data loss, no wrong decisions, explicit `busy` back-pressure) but it is **not** adequate for 300 truly simultaneous streams. Sizing guidance derived from both runs: budget ~25 frames/s per CPU core; a verification needs ~8–20 frames; so plan ~1 core per 1.5 concurrent kiosks and keep dedicated kiosks (Scenario A) rather than letting 300 phones stream at once. For phone-based check-in, deploy ≥ 2 API nodes behind a sticky-session load balancer or add a GPU (ONNX Runtime CUDA/DirectML provider is a one-line change in `embedder.py`/`pad.py`).
 
 Before the fix recorded in this document (per-IP session limiter at 30/min and JPEG decode on the event loop) the same scenario produced 244 HTTP 429s and 26 connect timeouts; both were corrected (limiter now 120/min per client IP and configurable, decode moved to the inference pool).
 
