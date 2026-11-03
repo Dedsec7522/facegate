@@ -244,7 +244,11 @@ function VerifyDialog({ open, action, employeeName, onClose, onRecorded }: { ope
             )}
             {phase === 'done' && recorded && (
               <motion.div key="d" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} transition={spring.snappy} className="text-center">
-                <span className="mx-auto grid size-14 place-items-center rounded-full bg-accent-500 text-white"><CheckCircle2 className="size-8" /></span>
+                <motion.span initial={{ scale: 0.5 }} animate={{ scale: 1 }} transition={spring.snappy} className="mx-auto grid size-16 place-items-center rounded-full bg-accent-500 text-white">
+                  <svg viewBox="0 0 24 24" className="size-9" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <motion.path d="M5 12.5l4.5 4.5L19 7.5" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.45, ease: [0.25, 1, 0.5, 1], delay: 0.15 }} />
+                  </svg>
+                </motion.span>
                 <p className="mt-3 text-xl font-semibold">{recorded.action === 'check_in' ? 'Logged in from office' : 'Logged out from office'}</p>
                 <p className="tabular mt-1 text-3xl font-semibold">{fmtTime(recorded.occurred_at)}</p>
                 <p className="mt-1 text-xs text-ink-3">Recorded on the server · verified by face</p>

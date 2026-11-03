@@ -53,8 +53,8 @@ export function CountUp({ value, decimals = 0, suffix = '', className }: { value
 export function Stat({ label, value, delta, tone = 'neutral', icon, decimals, suffix }: { label: string; value: number; delta?: ReactNode; tone?: 'neutral' | 'success' | 'warning' | 'danger'; icon?: ReactNode; decimals?: number; suffix?: string }) {
   const toneCls = { neutral: 'text-ink', success: 'text-accent-600', warning: 'text-amber-600', danger: 'text-red-600' }[tone]
   return (
-    <div className="card flex items-center gap-4 p-5">
-      {icon && <div className="grid size-11 shrink-0 place-items-center rounded-lg bg-surface-3 text-ink-2">{icon}</div>}
+    <motion.div whileHover={{ y: -2 }} transition={{ type: 'spring', stiffness: 400, damping: 30 }} className="card flex items-center gap-4 p-5">
+      {icon && <motion.div initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 380, damping: 22, delay: 0.1 }} className="grid size-11 shrink-0 place-items-center rounded-lg bg-surface-3 text-ink-2">{icon}</motion.div>}
       <div className="min-w-0">
         <p className="text-[13px] font-medium text-ink-3">{label}</p>
         <p className={cn('mt-0.5 text-2xl font-semibold leading-none tracking-tight', toneCls)}>
@@ -62,7 +62,7 @@ export function Stat({ label, value, delta, tone = 'neutral', icon, decimals, su
         </p>
         {delta && <p className="mt-1 text-xs text-ink-3">{delta}</p>}
       </div>
-    </div>
+    </motion.div>
   )
 }
 

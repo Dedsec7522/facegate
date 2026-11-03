@@ -92,9 +92,12 @@ export default function Kiosk() {
                 <ScanFace className="size-10 text-accent-400" aria-hidden />
                 <h1 className="mt-4 text-3xl font-semibold leading-tight">Check in or out with your face</h1>
                 <p className="mt-2 text-ink-2">Stand in front of the camera, press start, and follow the on-screen instruction. Identification takes a few seconds.</p>
-                <Button size="xl" variant="accent" className="mt-8 w-full" onClick={begin} disabled={cam.status !== 'ready'} rightIcon={<ArrowRight className="size-5" />}>
-                  {cam.status === 'ready' ? 'Start verification' : 'Waiting for camera…'}
-                </Button>
+                <div className="relative mt-8">
+                  {cam.status === 'ready' && <motion.span aria-hidden className="pointer-events-none absolute inset-0 rounded-xl bg-accent-500/40" animate={{ scale: [1, 1.04, 1], opacity: [0.5, 0, 0.5] }} transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }} />}
+                  <Button size="xl" variant="accent" className="relative w-full" onClick={begin} disabled={cam.status !== 'ready'} rightIcon={<ArrowRight className="size-5" />}>
+                    {cam.status === 'ready' ? 'Start verification' : 'Waiting for camera…'}
+                  </Button>
+                </div>
                 <button onClick={() => setScreen('pin')} className="mt-4 inline-flex items-center gap-2 self-start text-sm text-ink-3 hover:text-ink"><KeyRound className="size-4" /> Use employee code and PIN instead</button>
                 <p className="mt-auto pt-8 text-xs text-ink-3"><ShieldCheck className="mr-1 inline size-3.5" />Your face is matched against encrypted templates on this organisation's own server. No images are stored from this scan.</p>
               </Panel>
