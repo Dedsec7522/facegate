@@ -25,13 +25,20 @@ Inference is CPU-bound and runs in a bounded `ThreadPoolExecutor` (size = `INFER
 | Detect + 5 landmarks | YuNet 2023mar via `cv2.FaceDetectorYN` | MIT | OpenCV's standard face API; weights vendored with SHA-256 in `backend/models/` |
 | Quality gate | own code | — | min face size, Laplacian blur, brightness range, max yaw/roll from landmarks, single-face rule |
 | Align | own code | — | 5-point similarity transform → 112×112 (ArcFace-style reference template) |
-| Embed | SFace 2021dec (ONNX Runtime) | Apache-2.0 | 128-d, L2-normalised; multiple templates per employee (one per pose) |
+| Embed | SFace 2021dec (ONNX Runtime) | Apache-2.0 | 128-d, L2-normalised, horizontal-flip test-time augmentation (two passes averaged); 3 required frontal samples + optional left/right per enrolment; **adaptive templates**: a confident, live-verified identification (score ≥ 0.65, margin ≥ 0.15) adds the session embedding as an extra template (max 10 per employee, oldest adaptive dropped first) so recognition follows beards, glasses and haircuts |
 | Match | own code | — | cosine similarity against in-memory index; accept ≥ `MATCH_ACCEPT` (default 0.40, SFace-calibrated) **and** top-1 − top-2 (different identity) ≥ `MATCH_MARGIN` (0.08); otherwise `unknown` / `ambiguous` |
 | Passive PAD | MiniFASNet V1SE (scale 4.0) + V2 (scale 2.7), ONNX, 80×80 | Apache-2.0 | softmax over [spoof, live, spoof]; scores averaged across models and across frames |
 | Active challenge | own code | — | server picks `turn_left` / `turn_right`; yaw estimated from nose-vs-eye geometry over consecutive frames; must complete within session |
 | Replay guard | own code | — | session nonce, server-side frame counter & timestamps, max frame rate, TTL 90 s, token single-use |
 
 Stated limitation: RGB-only PAD resists prints and phone/monitor replays reasonably (model vendor reports 97.8 % TPR @ 1e-5 FPR on their data) but is **not** a certified ISO 30107-3 PAD and cannot stop a compromised camera device. For hostile environments, IR/depth hardware is recommended (see `docs/06-security-and-privacy.md`).
+
+### Two verification modes
+
+| Mode | Where | Decision |
+|---|---|---|
+| 1:N identification | Kiosk (`POST /verify/sessions`, anonymous) | best employee over the whole index with accept threshold + margin |
+| **1:1 verification bound to the account** | Employee portal (`POST /verify/sessions/me`, authenticated) | only the signed-in employee's templates are compared; anyone else's face → `mismatch`; the WebSocket hello must carry that account's token and the issued attendance token can only name that employee — nobody can log in or out from another person's portal |
 
 ## 3. Verification flow (no success before the DB commit)
 

@@ -184,7 +184,10 @@ export interface VerifySession {
   challenge_text: string | null
   ttl_seconds: number
   poses: string[] | null
+  required_poses?: string[] | null
+  bound?: boolean
   ws_token?: string
+  employee?: { id: string; name: string; code: string }
 }
 
 export interface FrameFeedback {
@@ -211,7 +214,7 @@ export interface FrameFeedback {
   liveness_score?: number
   attempt_id?: string
   // enrolment
-  poses?: { captured: string[]; target: string | null; text: string; just_captured?: string }
+  poses?: { captured: string[]; target: string | null; text: string; just_captured?: string; required_done?: boolean }
   pose_ok?: boolean
   enrolment_id?: string
   template_count?: number

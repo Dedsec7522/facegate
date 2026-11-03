@@ -6,6 +6,8 @@ export type StreamPhase = 'idle' | 'connecting' | 'streaming' | 'done' | 'error'
 
 interface Options {
   purpose: 'attendance' | 'enrolment'
+  /** Portal mode: the session is bound to the signed-in employee (1:1 verification). */
+  selfBound?: boolean
   employeeId?: string
   fps?: number
   grabFrame: (maxSide?: number, quality?: number) => Promise<Blob | null>
@@ -17,7 +19,7 @@ interface Options {
  * tracking the latest per-frame feedback. Frames are only sent when the previous reply arrived
  * (back-pressure), so a slow server never gets a growing queue.
  */
-export function useVerificationStream({ purpose, employeeId, fps = 6, grabFrame, onTerminal }: Options) {
+export function useVerificationStream({ purpose, selfBound = false, employeeId, fps = 6, grabFrame, onTerminal }: Options) {
   const [phase, setPhase] = useState<StreamPhase>('idle')
   const [session, setSession] = useState<VerifySession | null>(null)
   const [feedback, setFeedback] = useState<FrameFeedback | null>(null)
@@ -56,7 +58,7 @@ export function useVerificationStream({ purpose, employeeId, fps = 6, grabFrame,
     stats.current = { sent: 0, started: performance.now() }
     try {
       const s = purpose === 'attendance'
-        ? await api.post<VerifySession>('/verify/sessions')
+        ? await api.post<VerifySession>(selfBound ? '/verify/sessions/me' : '/verify/sessions')
         : await api.post<VerifySession>('/verify/enrolment-sessions', undefined, { employee_id: employeeId!, consent: true })
       setSession(s)
       // The server knows the frame size we send (640 max side); the stage needs it to scale boxes.
@@ -95,7 +97,7 @@ export function useVerificationStream({ purpose, employeeId, fps = 6, grabFrame,
       setError((e as Error).message)
       setPhase('error')
     }
-  }, [purpose, employeeId, grabFrame, send, fps, stop])
+  }, [purpose, selfBound, employeeId, grabFrame, send, fps, stop])
 
   const command = useCallback((cmd: Record<string, unknown>) => {
     ws.current?.send(JSON.stringify(cmd))

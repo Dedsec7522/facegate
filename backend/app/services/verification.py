@@ -26,13 +26,16 @@ CHALLENGES = ("turn_left", "turn_right")
 CHALLENGE_TEXT = {"turn_left": "Slowly turn your head to the left", "turn_right": "Slowly turn your head to the right"}
 YAW_TRIGGER = 18.0  # degrees of estimated yaw that counts as "turned"
 YAW_CENTRE = 9.0
-ENROL_POSES = ("front", "left", "right", "up", "down")
+# Three frontal samples are required (captured automatically a few frames apart so they carry natural
+# variation); a slight left and right turn are optional extras that help with off-angle kiosks.
+ENROL_POSES = ("front", "front_2", "front_3", "left", "right")
+REQUIRED_POSES = ("front", "front_2", "front_3")
 POSE_TEXT = {
-    "front": "Look straight at the camera",
-    "left": "Turn your head slightly to the left",
-    "right": "Turn your head slightly to the right",
-    "up": "Tilt your head slightly up",
-    "down": "Tilt your head slightly down",
+    "front": "Look at the camera and hold still",
+    "front_2": "Keep looking at the camera",
+    "front_3": "Almost there — hold still",
+    "left": "Optional: turn your head slightly to the left",
+    "right": "Optional: turn your head slightly to the right",
 }
 
 
@@ -46,6 +49,9 @@ class Session:
     user_agent: str | None
     challenge: str | None
     employee_id: str | None = None  # enrolment target
+    bound_employee_id: str | None = None  # portal 1:1 verification: must match THIS employee only
+    probe: np.ndarray | None = None  # aggregated embedding of the session (for adaptive templates)
+    last_capture_frame: int = 0
     require_challenge: bool = True
     pad_threshold: float = settings.pad_live_threshold
     accept_threshold: float = settings.match_accept_threshold
@@ -79,7 +85,7 @@ class SessionManager:
 
     async def create(self, purpose: str, *, ip: str | None, user_agent: str | None, require_challenge: bool = True,
                      pad_threshold: float | None = None, accept_threshold: float | None = None,
-                     employee_id: str | None = None, consent_version: str | None = None) -> Session:
+                     employee_id: str | None = None, consent_version: str | None = None, bound_employee_id: str | None = None) -> Session:
         async with self._lock:
             self._gc()
             s = Session(
@@ -95,6 +101,7 @@ class SessionManager:
                 pad_threshold=pad_threshold or settings.pad_live_threshold,
                 accept_threshold=accept_threshold or settings.match_accept_threshold,
                 consent_version=consent_version,
+                bound_employee_id=bound_employee_id,
             )
             if s.challenge is None:
                 s.challenge_state = "passed"
@@ -130,6 +137,8 @@ class SessionManager:
             "challenge_text": CHALLENGE_TEXT.get(s.challenge or "", None),
             "ttl_seconds": settings.verify_session_ttl_seconds,
             "poses": list(ENROL_POSES) if s.purpose == "enrolment" else None,
+            "required_poses": list(REQUIRED_POSES) if s.purpose == "enrolment" else None,
+            "bound": s.bound_employee_id is not None,
         }
 
     def rate_ok(self, s: Session) -> bool:
@@ -212,6 +221,19 @@ class SessionManager:
         if consistency < 0.45:
             return self._finish(s, {"state": "rejected", "reason": "inconsistent", "message": "The face changed during verification. Please try again.",
                                     "liveness_score": live_avg, "match_score": None})
+        s.probe = mean
+        if s.bound_employee_id:
+            # 1:1 verification for the signed-in employee: only their own templates count. Nobody can
+            # check in from another person's portal account, whatever face is in front of the camera.
+            ranked = dict(pipe.index.best_per_employee(mean))
+            own = ranked.get(s.bound_employee_id)
+            if own is None:
+                return self._finish(s, {"state": "rejected", "reason": "not_enrolled", "message": "Your account has no enrolled face yet. Ask an administrator to enrol you.",
+                                        "liveness_score": round(live_avg, 3), "match_score": None, "frames": s.frames})
+            base = {"liveness_score": round(live_avg, 3), "match_score": round(own, 3), "second_score": None, "second_employee_id": None, "frames": s.frames}
+            if own >= s.accept_threshold:
+                return self._finish(s, {"state": "identified", "employee_id": s.bound_employee_id, **base})
+            return self._finish(s, {"state": "rejected", "reason": "mismatch", "message": "This face does not match the face enrolled for your account.", **base})
         m = pipe.index.match(mean, accept=s.accept_threshold)
         base = {"liveness_score": round(live_avg, 3), "match_score": round(m.score, 3), "second_score": round(m.second_score, 3),
                 "second_employee_id": m.second_employee_id, "frames": s.frames}
@@ -234,7 +256,7 @@ class SessionManager:
         resp = self._frame_feedback(a, s)
         remaining = [p for p in ENROL_POSES if p not in s.poses]
         target = remaining[0] if remaining else None
-        resp["poses"] = {"captured": list(s.poses), "target": target, "text": POSE_TEXT.get(target or "", "All poses captured")}
+        resp["poses"] = {"captured": list(s.poses), "target": target, "text": POSE_TEXT.get(target or "", "All poses captured"), "required_done": all(p in s.poses for p in REQUIRED_POSES)}
         if a.state != "ok" or target is None:
             resp["state"] = "collecting" if target else "complete"
             return resp
@@ -242,12 +264,13 @@ class SessionManager:
         if a.live_prob is not None:
             s.live_probs.append(a.live_prob)
         yaw, pitch = q.yaw, q.pitch
+        frontal = abs(yaw) < 14 and abs(pitch) < 16
         ok_pose = {
-            "front": abs(yaw) < 10 and abs(pitch) < 12,
-            "left": yaw > 12 and yaw < 40,
-            "right": yaw < -12 and yaw > -40,
-            "up": pitch < -8 and abs(yaw) < 15,
-            "down": pitch > 10 and abs(yaw) < 15,
+            "front": frontal,
+            "front_2": frontal and s.frames - s.last_capture_frame >= 3,
+            "front_3": frontal and s.frames - s.last_capture_frame >= 3,
+            "left": 8 < yaw < 38,
+            "right": -38 < yaw < -8,
         }[target]
         resp["pose_ok"] = ok_pose
         resp["yaw"], resp["pitch"] = round(yaw, 1), round(pitch, 1)
@@ -255,6 +278,7 @@ class SessionManager:
             s.pose_hold[target] = s.pose_hold.get(target, 0) + 1
             if s.pose_hold[target] >= 2:  # need two consecutive good frames in the pose
                 s.poses[target] = (a.embedding, q.score, a.aligned)
+                s.last_capture_frame = s.frames
                 remaining = [p for p in ENROL_POSES if p not in s.poses]
                 resp["poses"] = {"captured": list(s.poses), "target": remaining[0] if remaining else None,
                                  "text": POSE_TEXT.get(remaining[0], "All poses captured") if remaining else "All poses captured",
@@ -263,6 +287,7 @@ class SessionManager:
             s.pose_hold[target] = 0
         live_avg = float(np.median(s.live_probs)) if s.live_probs else 0.0
         resp["liveness"] = {"frames": len(s.live_probs), "score": round(live_avg, 3), "passed": len(s.live_probs) >= settings.pad_min_frames and live_avg >= s.pad_threshold}
+        resp["poses"]["required_done"] = all(p in s.poses for p in REQUIRED_POSES)
         resp["state"] = "complete" if len(s.poses) == len(ENROL_POSES) else "collecting"
         return resp
 

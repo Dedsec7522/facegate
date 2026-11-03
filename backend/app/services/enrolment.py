@@ -24,7 +24,7 @@ class EnrolmentError(Exception):
 
 async def commit_enrolment(db: AsyncSession, s: Session, *, employee: Employee, created_by: str | None, notes: str | None = None) -> BiometricEnrolment:
     if len(s.poses) < 3:
-        raise EnrolmentError("incomplete", "At least three poses must be captured before saving.")
+        raise EnrolmentError("incomplete", "At least three frontal samples must be captured before saving.")
     live_avg = float(np.median(s.live_probs)) if s.live_probs else 0.0
     if len(s.live_probs) < settings.pad_min_frames or live_avg < s.pad_threshold:
         raise EnrolmentError("liveness", f"Liveness during enrolment was too low ({live_avg:.2f}). Use the live camera.")
@@ -74,6 +74,35 @@ async def commit_enrolment(db: AsyncSession, s: Session, *, employee: Employee, 
     await db.flush()
     await rebuild_index(db)
     return enrol
+
+
+MAX_TEMPLATES_PER_EMPLOYEE = 10
+
+
+async def add_adaptive_template(db: AsyncSession, employee_id: str, emb: np.ndarray, score: float) -> bool:
+    """After a confident, live-verified identification, keep the session's embedding as an extra template
+    so the model follows gradual appearance changes (beard, glasses, hairstyle). Bounded per employee;
+    the oldest adaptive template is dropped first. Never touches the admin-captured enrolment samples."""
+    enrol = (await db.execute(select(BiometricEnrolment).where(BiometricEnrolment.employee_id == employee_id, BiometricEnrolment.status == EnrolmentStatus.active))).scalar_one_or_none()
+    if enrol is None:
+        return False
+    existing = (await db.execute(select(FaceTemplate).where(FaceTemplate.enrolment_id == enrol.id).order_by(FaceTemplate.created_at))).scalars().all()
+    from app.core.crypto import decrypt_embedding
+
+    for t in existing:  # skip if a near-identical adaptive template is already held (no information gain)
+        if t.pose == "auto" and float(decrypt_embedding(t.embedding_enc, t.id) @ emb) > 0.92:
+            return False
+    autos = [t for t in existing if t.pose == "auto"]
+    while len(existing) >= MAX_TEMPLATES_PER_EMPLOYEE and autos:
+        oldest = autos.pop(0)
+        existing.remove(oldest)
+        await db.delete(oldest)
+    tid = new_id()
+    db.add(FaceTemplate(id=tid, enrolment_id=enrol.id, employee_id=employee_id, pose="auto", embedding_enc=encrypt_embedding(emb, tid), quality=float(score)))
+    enrol.template_count = len(existing) + 1
+    await db.flush()
+    await rebuild_index(db)
+    return True
 
 
 async def revoke_enrolments(db: AsyncSession, employee_id: str) -> int:

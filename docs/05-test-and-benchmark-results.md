@@ -2,13 +2,14 @@
 
 Machine: Windows 11, Intel i5-1135G7 (4 cores / 8 threads, 2.4 GHz), 16 GB RAM, **no GPU**, Python 3.13, ONNX Runtime 1.31 CPU, OpenCV 4.14, Postgres 16 in Docker. Date: 2026-11-03.
 
-## 1. Automated tests (`backend/tests`, 19 passed)
+## 1. Automated tests (`backend/tests`, 21 passed)
 
 | File | What is verified |
 |---|---|
 | `test_attendance_engine.py` (4) | overnight day boundary incl. BST; check-out without check-in rejected; late minutes after grace; duplicate scan inside window rejected; double check-in rejected; worked minutes across two sessions; early-leave minutes; inactive employee rejected; corrections require a reason, void + adjust + add recompute the day and preserve before/after JSON |
 | `test_vision.py` (6) | no-face and multiple-face detection; dark / too-small frames fail quality gates; same identity stable under brightness, resolution and mirroring (cosine > 0.6); identification rules (self-match > 0.95, unknown rejected, near-duplicate → `ambiguous`, empty index → no decision); alignment shape; per-frame latency budget |
 | `test_api.py` (7) | wrong password 401; unauthenticated 401; employee role gets 403 on admin routes but 200 on own status; employee CRUD + conflict + audit entries; verification token single-use (replay 409) and garbage token 401; PIN fallback refused until an admin sets a PIN, then recorded as `method=pin`; settings patch + dashboard + CSV export; public session creation returns nonce + challenge |
+| `test_bound_verification.py` (2) | portal 1:1 mode: another person's face in your portal → `mismatch` (never identified as them); own face → identified as you only; account without enrolment → `not_enrolled`; kiosk (unbound) still identifies 1:N; `POST /verify/sessions/me` → 401 anonymous, 404 for accounts without an employee, 200 + bound session for an employee |
 | `test_e2e_stream.py` (2) | **full loop**: enrol a synthetic face through `commit_enrolment` → duplicate-identity guard raises for a second employee → kiosk WebSocket with real JPEG frames identifies the enrolled face (score > 0.8), issues a token, `POST /attendance/events` stores the event, token replay → 409; wrong nonce refused; a different face → `rejected:unknown`; blank frame → `no_face` guidance only. Challenge state machine: turn-and-return passes, no turn stays pending, sustained wrong direction fails |
 
 Frontend: `tsc -b` clean, `vite build` clean (largest chunk: charts 442 kB / 124 kB gzip, lazy-loaded).
@@ -30,8 +31,10 @@ Frontend: `tsc -b` clean, `vite build` clean (largest chunk: charts 442 kB / 124
 |---|---|---|
 | YuNet detect | 17.4 ms | 22.0 ms |
 | MiniFASNet PAD (2 models) | 6.1 ms | 8.5 ms |
-| SFace embed | 13.9 ms | 25.5 ms |
-| **Frame total** | **37.5 ms** | **53.9 ms** |
+| SFace embed (with flip test-time augmentation, two passes) | 35.3 ms | 50.8 ms |
+| **Frame total** | **61.0 ms** | **88.3 ms** |
+
+(Before flip-TTA was added the embed stage was 13.9 ms and a frame 37.5 ms; the extra pass buys a more stable embedding per frame.)
 | Match, 50 employees (250 templates) | 0.07 ms | |
 | Match, 300 employees (1 500 templates) | 0.44 ms | |
 | Match, 1 000 employees (5 000 templates) | 2.6 ms | |

@@ -16,9 +16,11 @@ import { cn } from '../../lib/cn'
 import { spring } from '../../lib/motion'
 import type { Employee, FrameFeedback, OrgSettings } from '../../lib/types'
 
-const POSES: Array<{ key: string; label: string }> = [
-  { key: 'front', label: 'Straight' }, { key: 'left', label: 'Left' }, { key: 'right', label: 'Right' }, { key: 'up', label: 'Up' }, { key: 'down', label: 'Down' },
+const POSES: Array<{ key: string; label: string; optional?: boolean }> = [
+  { key: 'front', label: 'Sample 1' }, { key: 'front_2', label: 'Sample 2' }, { key: 'front_3', label: 'Sample 3' },
+  { key: 'left', label: 'Left', optional: true }, { key: 'right', label: 'Right', optional: true },
 ]
+const REQUIRED = POSES.filter((p) => !p.optional).map((p) => p.key)
 
 type Step = 'consent' | 'capture' | 'review' | 'saved'
 
@@ -50,6 +52,7 @@ export default function Enrolment() {
 
   const fb = stream.feedback
   const captured = fb?.poses?.captured ?? []
+  const requiredDone = fb?.poses?.required_done ?? REQUIRED.every((k) => captured.includes(k))
   const complete = fb?.state === 'complete' || captured.length === POSES.length
   useEffect(() => { if (complete && step === 'capture') setStep('review') }, [complete, step])
 
@@ -94,7 +97,7 @@ export default function Enrolment() {
             {(step === 'capture' || step === 'review') && (
               <motion.div key="capture" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
                 <Card>
-                  <CardHeader title={step === 'review' ? 'All poses captured' : 'Capture five poses'} description={step === 'review' ? 'Review the quality below and save the enrolment.' : 'Ask the employee to follow the instruction. Each pose is captured automatically when the quality is good.'} />
+                  <CardHeader title={step === 'review' ? 'Capture complete' : requiredDone ? 'Optional extra angles' : 'Look at the camera'} description={step === 'review' ? 'Review the quality below and save the enrolment.' : requiredDone ? 'Three frontal samples are saved. A slight left/right turn improves off-angle recognition — or save now.' : 'Three frontal samples are captured automatically while the employee looks at the camera.'} />
                   <CardBody>
                     <p className="min-h-7 text-lg font-medium" aria-live="polite">
                       {step === 'review' ? 'Ready to save' : stream.error ?? (fb ? (fb.state === 'ok' || fb.state === 'collecting' ? fb.poses?.text : fb.guidance) : 'Starting camera stream…')}
@@ -106,7 +109,7 @@ export default function Enrolment() {
                         return (
                           <li key={p.key} className={cn('relative flex flex-col items-center gap-1.5 rounded-lg border p-2 text-xs transition-colors', done ? 'border-accent-300 bg-accent-50 text-accent-700 dark:border-accent-800 dark:bg-accent-800/20 dark:text-accent-300' : active ? 'border-brand-400 bg-brand-50 text-brand-700 dark:bg-brand-800/30 dark:text-brand-100' : 'border-line text-ink-3')}>
                             <PoseGlyph pose={p.key} />
-                            <span>{p.label}</span>
+                            <span>{p.label}{p.optional && <span className="block text-[10px] text-ink-3">optional</span>}</span>
                             <AnimatePresence>{done && <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={spring.snappy} className="absolute -right-1.5 -top-1.5 grid size-5 place-items-center rounded-full bg-accent-500 text-white"><Check className="size-3" /></motion.span>}</AnimatePresence>
                           </li>
                         )
@@ -127,7 +130,7 @@ export default function Enrolment() {
                       </div>
                     )}
                     <div className="mt-5 flex gap-2">
-                      <Button size="lg" className="flex-1" disabled={step !== 'review' || saving} loading={saving} onClick={save} leftIcon={<Save className="size-4" />}>Save enrolment</Button>
+                      <Button size="lg" className="flex-1" disabled={!(step === 'review' || requiredDone) || saving} loading={saving} onClick={save} leftIcon={<Save className="size-4" />}>Save enrolment</Button>
                       <Button size="lg" variant="outline" onClick={restart} leftIcon={<RefreshCw className="size-4" />}>Restart</Button>
                     </div>
                   </CardBody>
@@ -184,8 +187,8 @@ function Metric({ label, value, ok }: { label: string; value: string; ok: boolea
 }
 
 function PoseGlyph({ pose }: { pose: string }) {
-  const rot = ({ front: 0, left: -1, right: 1, up: 0, down: 0 } as Record<string, number>)[pose] ?? 0
-  const dy = pose === 'up' ? -2 : pose === 'down' ? 2 : 0
+  const rot = ({ front: 0, front_2: 0, front_3: 0, left: -1, right: 1 } as Record<string, number>)[pose] ?? 0
+  const dy = 0
   return (
     <svg viewBox="0 0 24 24" className="size-7" aria-hidden>
       <ellipse cx="12" cy="11" rx="6" ry="7.5" fill="none" stroke="currentColor" strokeWidth="1.5" />

@@ -12,7 +12,7 @@ from app.core.rate_limit import client_ip, limit, verify_session_limiter
 from app.core.security import create_access_token, create_verification_token, decode_token
 from app.db.base import SessionLocal, get_db
 from app.db.models import Employee, EmployeeStatus, Role, UserAccount, VerificationAttempt, VerificationOutcome
-from app.services.enrolment import EnrolmentError, commit_enrolment
+from app.services.enrolment import EnrolmentError, add_adaptive_template, commit_enrolment
 from app.services.org_settings import get_org_settings
 from app.services.verification import manager
 from app.vision.pipeline import get_pipeline
@@ -27,6 +27,22 @@ async def create_session(request: Request, db: AsyncSession = Depends(get_db)):
     s = await manager.create("attendance", ip=client_ip(request), user_agent=(request.headers.get("user-agent") or "")[:255],
                              require_challenge=org.require_challenge, pad_threshold=org.pad_live_threshold, accept_threshold=org.match_accept_threshold)
     return manager.public(s)
+
+
+@router.post("/sessions/me")
+async def create_bound_session(request: Request, db: AsyncSession = Depends(get_db), user: UserAccount = Depends(get_current_user)):
+    """Portal: a verification session bound to the signed-in employee (1:1). The face shown must match
+    THIS account's enrolment; the resulting token can only record attendance for this employee."""
+    if not user.employee_id:
+        raise HTTPException(404, "No employee profile is linked to this account")
+    emp = await db.get(Employee, user.employee_id)
+    if not emp or emp.status != EmployeeStatus.active:
+        raise HTTPException(404, "Active employee not found")
+    org = await get_org_settings(db)
+    s = await manager.create("attendance", ip=client_ip(request), user_agent=(request.headers.get("user-agent") or "")[:255],
+                             require_challenge=org.require_challenge, pad_threshold=org.pad_live_threshold, accept_threshold=org.match_accept_threshold,
+                             bound_employee_id=emp.id)
+    return {**manager.public(s), "ws_token": create_access_token(user.id, user.role.value, True), "employee": {"id": emp.id, "name": emp.full_name, "code": emp.employee_code}}
 
 
 @router.post("/enrolment-sessions")
@@ -67,11 +83,20 @@ async def stream(ws: WebSocket, session_id: str):
         return
     await ws.accept()
     try:
-        hello = await ws.receive_text()
-        if json.loads(hello).get("nonce") != s.nonce:
+        hello = json.loads(await ws.receive_text())
+        if hello.get("nonce") != s.nonce:
             await ws.send_json({"state": "error", "message": "Session nonce mismatch"})
             await ws.close(code=4403)
             return
+        if s.bound_employee_id:
+            # The socket must belong to the same signed-in account the session was bound to.
+            payload = decode_token(hello.get("token", ""), "access")
+            async with SessionLocal() as db:
+                acct = await db.get(UserAccount, payload["sub"]) if payload else None
+            if not acct or acct.employee_id != s.bound_employee_id:
+                await ws.send_json({"state": "error", "message": "This verification session belongs to another account"})
+                await ws.close(code=4403)
+                return
         pipe = get_pipeline()
         while not s.done:
             msg = await ws.receive()
@@ -99,6 +124,14 @@ async def stream(ws: WebSocket, session_id: str):
 
                         org = await get_org_settings(db)
                         nxt = await next_expected_action(db, emp.id, org)
+                        # Adaptive templates: only after a confident, live-verified match with a clear margin.
+                        if org.adaptive_templates and s.probe is not None and (s.result.get("match_score") or 0) >= 0.65 \
+                                and (s.result.get("second_score") or 0) < s.result["match_score"] - 0.15:
+                            try:
+                                if await add_adaptive_template(db, emp.id, s.probe, s.result["match_score"]):
+                                    await db.commit()
+                            except Exception:  # never let template maintenance break a check-in
+                                await db.rollback()
                     resp = {**resp, "attempt_id": att_id, "token": create_verification_token(s.id, emp.id, "face"),
                             "employee": {"id": emp.id, "name": emp.full_name, "code": emp.employee_code, "department": None}, "next": nxt}
                 else:

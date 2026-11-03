@@ -16,6 +16,8 @@ from app.db.base import get_db
 from app.db.models import (
     AttendanceAction,
     AttendanceCorrection,
+    BiometricEnrolment,
+    EnrolmentStatus,
     AttendanceDay,
     AttendanceEvent,
     AttendanceMethod,
@@ -290,8 +292,20 @@ async def my_status(db: AsyncSession = Depends(get_db), user: UserAccount = Depe
     today = date.fromisoformat(nxt["attendance_date"])
     day = (await db.execute(select(AttendanceDay).where(AttendanceDay.employee_id == user.employee_id, AttendanceDay.attendance_date == today))).scalar_one_or_none()
     emp = await db.get(Employee, user.employee_id)
-    return {"employee": {"id": emp.id, "name": emp.full_name, "code": emp.employee_code}, "next": nxt, "today": _day_out(day, emp, None) if day else None,
+    enrolled = (await db.execute(select(BiometricEnrolment.id).where(BiometricEnrolment.employee_id == emp.id, BiometricEnrolment.status == EnrolmentStatus.active))).first() is not None
+    return {"employee": {"id": emp.id, "name": emp.full_name, "code": emp.employee_code, "enrolled": enrolled}, "next": nxt, "today": _day_out(day, emp, None) if day else None,
             "work_start": org.work_start, "work_end": org.work_end, "timezone": org.timezone}
+
+
+@router.get("/me/thumbnail")
+async def my_thumbnail(db: AsyncSession = Depends(get_db), user: UserAccount = Depends(get_current_user)):
+    """The signed-in employee's own enrolment thumbnail (never another employee's)."""
+    if not user.employee_id:
+        raise HTTPException(404, "No employee profile linked to this account")
+    r = (await db.execute(select(BiometricEnrolment).where(BiometricEnrolment.employee_id == user.employee_id, BiometricEnrolment.status == EnrolmentStatus.active))).scalar_one_or_none()
+    if not r or not r.thumbnail_jpeg:
+        raise HTTPException(404, "No thumbnail")
+    return Response(content=r.thumbnail_jpeg, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=300"})
 
 
 @router.get("/me/days", response_model=Page[AttendanceDayOut])

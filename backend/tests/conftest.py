@@ -62,7 +62,10 @@ async def db():
 
 @pytest_asyncio.fixture
 async def client():
+    from app.core.rate_limit import login_limiter
     from app.main import app
+
+    login_limiter._hits.clear()  # every test starts with a fresh login budget (ASGI test client has no stable IP)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c

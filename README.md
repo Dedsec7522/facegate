@@ -35,7 +35,7 @@ uvicorn app.main:app --reload --port 8000
 cd frontend && npm install && npm run dev            # http://localhost:5173 (proxies /api to :8000)
 ```
 
-Then open http://localhost:5173 → **Administrator sign-in** with username `admin` / password `Welcome123` (or the email `admin@facegate.local`) → *Employees* → pick someone → **Enrol face** → open the **kiosk** and check in.
+Then open http://localhost:5173 → **Administrator sign-in** with username `admin` / password `Welcome123` (or the email `admin@facegate.local`) → *Employees* → pick someone → **Enrol face** (three automatic frontal samples; left/right turns optional) → open the **kiosk** and check in, or create the employee a login and use **Login from Office** in their portal.
 
 PAD models: `backend/models/minifasnet_*.onnx` are committed. To regenerate them from the vendor checkpoints run `tools/export_pad_onnx.py` with a separate venv that has `torch` (see the script header).
 
@@ -60,7 +60,7 @@ docker compose exec api python tools/seed.py --admin-username admin --admin-emai
 | Role | Where | What |
 |---|---|---|
 | Employee | `/kiosk` | Start verification → follow the head-turn prompt → choose Check in / Check out. Optional admin-enabled PIN fallback. |
-| Employee | `/portal` | Own attendance status, history and event timeline (needs an account created by an admin). |
+| Employee | `/portal` | **Login from Office / Logout from Office** with a face check bound to the signed-in account (1:1 — only your own enrolled face can log your account in or out), today's times, history and event timeline (needs an account created by an admin). |
 | Admin / HR | `/admin` | Dashboard, employees & departments, enrolment, live attendance board, corrections, reports & exports, settings, MFA, users, audit log. |
 
 ## 4. Tests and benchmarks

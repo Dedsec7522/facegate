@@ -24,6 +24,7 @@ class OrgSettings:
     match_accept_threshold: float
     pad_live_threshold: float
     require_challenge: bool
+    adaptive_templates: bool
     consent_version: str
 
     def t(self, field: str) -> time:
@@ -43,6 +44,7 @@ def defaults() -> OrgSettings:
         match_accept_threshold=settings.match_accept_threshold,
         pad_live_threshold=settings.pad_live_threshold,
         require_challenge=True,
+        adaptive_templates=True,
         consent_version="2026-11",
     )
 
