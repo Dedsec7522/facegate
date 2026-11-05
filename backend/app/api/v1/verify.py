@@ -25,7 +25,8 @@ router = APIRouter(prefix="/verify", tags=["verify"])
 async def create_session(request: Request, db: AsyncSession = Depends(get_db)):
     org = await get_org_settings(db)
     s = await manager.create("attendance", ip=client_ip(request), user_agent=(request.headers.get("user-agent") or "")[:255],
-                             require_challenge=org.require_challenge, pad_threshold=org.pad_live_threshold, accept_threshold=org.match_accept_threshold)
+                             require_challenge=org.require_challenge, pad_threshold=org.pad_live_threshold, accept_threshold=org.match_accept_threshold,
+                             liveness_policy=org.kiosk_liveness)
     return manager.public(s)
 
 
@@ -41,7 +42,7 @@ async def create_bound_session(request: Request, db: AsyncSession = Depends(get_
     org = await get_org_settings(db)
     s = await manager.create("attendance", ip=client_ip(request), user_agent=(request.headers.get("user-agent") or "")[:255],
                              require_challenge=org.require_challenge, pad_threshold=org.pad_live_threshold, accept_threshold=org.match_accept_threshold,
-                             bound_employee_id=emp.id)
+                             bound_employee_id=emp.id, liveness_policy=org.portal_liveness)
     return {**manager.public(s), "ws_token": create_access_token(user.id, user.role.value, True), "employee": {"id": emp.id, "name": emp.full_name, "code": emp.employee_code}}
 
 

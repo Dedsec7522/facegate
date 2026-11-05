@@ -151,6 +151,8 @@ export interface OrgSettings {
   match_accept_threshold: number
   pad_live_threshold: number
   require_challenge: boolean
+  kiosk_liveness: 'advisory' | 'passive' | 'strict'
+  portal_liveness: 'advisory' | 'passive' | 'strict'
   consent_version: string
 }
 

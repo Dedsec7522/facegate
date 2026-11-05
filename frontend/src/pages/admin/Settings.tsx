@@ -8,7 +8,7 @@ import type { AuditEntry, OrgSettings } from '../../lib/types'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Card, CardBody, CardHeader } from '../../components/ui/Card'
-import { Input, Switch } from '../../components/ui/Field'
+import { Input, Select, Switch } from '../../components/ui/Field'
 import { EmptyState, PageHeader, Pagination, Skeleton, Table, Tabs, Td, Th } from '../../components/ui/Misc'
 import { useToast } from '../../components/ui/Toast'
 
@@ -79,7 +79,19 @@ function OrgSettingsForm({ section, readOnly }: { section: 'rules' | 'verificati
           <input id="thr-pad" type="range" min={0.3} max={0.99} step={0.01} value={form.pad_live_threshold} onChange={(e) => set('pad_live_threshold', Number(e.target.value))} disabled={readOnly} className="mt-2 w-full accent-brand-700" />
           <p className="mt-1 text-[13px] text-ink-3">Average presentation-attack-detection score (over several frames) required before matching. Lower values make printed photos and screens more likely to pass.</p>
         </div>
-        <Switch checked={form.require_challenge} onChange={(v) => set('require_challenge', v)} disabled={readOnly} label="Require head-turn challenge" description="Server-chosen active liveness check in addition to passive detection. Recommended." />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Select label="Kiosk liveness (anonymous)" value={form.kiosk_liveness} onChange={(e) => set('kiosk_liveness', e.target.value as OrgSettings['kiosk_liveness'])} disabled={readOnly} hint="Passive: anti-spoof model gates, head-turn only when unsure.">
+            <option value="advisory">Advisory — identify instantly, log the score</option>
+            <option value="passive">Passive — anti-spoof gate with step-up</option>
+            <option value="strict">Strict — always require a head turn</option>
+          </Select>
+          <Select label="Portal liveness (signed-in)" value={form.portal_liveness} onChange={(e) => set('portal_liveness', e.target.value as OrgSettings['portal_liveness'])} disabled={readOnly} hint="The portal already requires the employee's password and only matches their own face.">
+            <option value="advisory">Advisory — identify instantly, log the score</option>
+            <option value="passive">Passive — anti-spoof gate with step-up</option>
+            <option value="strict">Strict — always require a head turn</option>
+          </Select>
+        </div>
+        <Switch checked={form.require_challenge} onChange={(v) => set('require_challenge', v)} disabled={readOnly} label="Always require the head-turn challenge" description="Overrides both policies above with a mandatory active check on every verification." />
         <Input label="Consent notice version" hint="Recorded with every enrolment; bump it when the privacy notice changes." value={form.consent_version} onChange={(e) => set('consent_version', e.target.value)} disabled={readOnly} />
       </CardBody>
       {footer}

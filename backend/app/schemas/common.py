@@ -194,5 +194,7 @@ class SettingsPatch(BaseModel):
     match_accept_threshold: float | None = Field(default=None, ge=0.2, le=0.9)
     pad_live_threshold: float | None = Field(default=None, ge=0.3, le=0.99)
     require_challenge: bool | None = None
+    kiosk_liveness: str | None = Field(default=None, pattern=r"^(advisory|passive|strict)$")
+    portal_liveness: str | None = Field(default=None, pattern=r"^(advisory|passive|strict)$")
     adaptive_templates: bool | None = None
     consent_version: str | None = None

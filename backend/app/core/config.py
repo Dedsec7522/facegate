@@ -41,11 +41,12 @@ class Settings(BaseSettings):
     match_accept_threshold: float = 0.40
     match_margin: float = 0.08
     duplicate_enrol_threshold: float = 0.55
-    pad_live_threshold: float = 0.50  # median live-probability that passes on passive evidence alone
+    pad_live_threshold: float = 0.45  # median live-probability that passes on passive evidence alone
     pad_spoof_threshold: float = 0.20  # median below this (after pad_reject_min_frames) is a clear spoof; in between → step-up head-turn
     pad_reject_min_frames: int = 14  # frames of evidence required before a session is rejected as spoof
     pad_min_frames: int = 3
     embed_min_frames: int = 3
+    motion_min_frames: int = 5  # frames of landmark history needed before the frozen-stream check can pass
     min_face_size: int = 110
     max_stream_fps: float = 10.0
     verify_sessions_per_minute: int = 120  # per client IP; raise behind a shared office NAT

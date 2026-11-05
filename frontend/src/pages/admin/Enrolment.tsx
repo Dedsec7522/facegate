@@ -43,7 +43,7 @@ export default function Enrolment() {
     if (fb.state === 'saved') { setSaved(fb); setStep('saved'); setSaving(false); void qc.invalidateQueries({ queryKey: ['employee', id] }); void qc.invalidateQueries({ queryKey: ['employees'] }) }
     else if (fb.state === 'error') { setSaveError(fb); setSaving(false); setStep('review') }
   }, [id, qc])
-  const stream = useVerificationStream({ purpose: 'enrolment', employeeId: id, grabFrame: cam.grabFrame, fps: 5, onTerminal })
+  const stream = useVerificationStream({ purpose: 'enrolment', employeeId: id, grabFrame: cam.grabFrame, fps: 10, onTerminal })
   const { start: streamStart, phase } = stream
 
   useEffect(() => {
@@ -55,6 +55,12 @@ export default function Enrolment() {
   const requiredDone = fb?.poses?.required_done ?? REQUIRED.every((k) => captured.includes(k))
   const complete = fb?.state === 'complete' || captured.length === POSES.length
   useEffect(() => { if (complete && step === 'capture') setStep('review') }, [complete, step])
+  // Instant enrolment: as soon as the three frontal samples are in, save without waiting for optional angles.
+  const [autoSave, setAutoSave] = useState(true)
+  useEffect(() => {
+    if (autoSave && requiredDone && step === 'capture' && !saving && !saveError) { setSaving(true); stream.command({ cmd: 'save' }) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSave, requiredDone, step])
 
   const save = () => { setSaving(true); setSaveError(null); stream.command({ cmd: 'save' }) }
   const restart = () => { setSaveError(null); stream.command({ cmd: 'restart' }); setStep('capture') }
@@ -88,6 +94,7 @@ export default function Enrolment() {
                       <li>The employee may ask an administrator to delete their template at any time; attendance history is retained per company policy.</li>
                     </ul>
                     <Switch checked={consent} onChange={setConsent} label="The employee has read this notice and consents to biometric enrolment" description="Recorded with the enrolment together with your administrator account." />
+                    <Switch checked={autoSave} onChange={setAutoSave} label="Instant capture" description="Save automatically the moment three good frontal samples are captured (about one second). Turn off to add optional angles first." />
                     <Button size="lg" className="w-full" disabled={!consent} onClick={() => setStep('capture')} leftIcon={<ShieldCheck className="size-4" />}>Start capture</Button>
                   </CardBody>
                 </Card>

@@ -31,6 +31,8 @@ pytestmark = pytest.mark.skipif(len(FILES) < 2, reason="synthetic face images no
 def _frame(path: str, jitter: int = 0) -> tuple[np.ndarray, bytes]:
     img = cv2.resize(cv2.imread(path), (640, 640))
     img = cv2.convertScaleAbs(img, alpha=1.0, beta=jitter)
+    # A live face is never perfectly still: nudge the frame a few pixels so the frozen-stream check sees motion.
+    img = np.roll(img, shift=(jitter * 2, jitter * 3), axis=(0, 1))
     ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 85])
     return img, buf.tobytes()
 

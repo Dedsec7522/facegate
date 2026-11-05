@@ -50,6 +50,7 @@ class Session:
     challenge: str | None
     employee_id: str | None = None  # enrolment target
     bound_employee_id: str | None = None  # portal 1:1 verification: must match THIS employee only
+    liveness_policy: str = "passive"  # advisory | passive | strict
     probe: np.ndarray | None = None  # aggregated embedding of the session (for adaptive templates)
     last_capture_frame: int = 0
     require_challenge: bool = True
@@ -87,7 +88,8 @@ class SessionManager:
 
     async def create(self, purpose: str, *, ip: str | None, user_agent: str | None, require_challenge: bool = True,
                      pad_threshold: float | None = None, accept_threshold: float | None = None,
-                     employee_id: str | None = None, consent_version: str | None = None, bound_employee_id: str | None = None) -> Session:
+                     employee_id: str | None = None, consent_version: str | None = None, bound_employee_id: str | None = None,
+                     liveness_policy: str = "passive") -> Session:
         async with self._lock:
             self._gc()
             s = Session(
@@ -97,13 +99,14 @@ class SessionManager:
                 created=time.monotonic(),
                 ip=ip,
                 user_agent=user_agent,
-                challenge=secrets.choice(CHALLENGES) if (purpose == "attendance" and require_challenge) else None,
+                challenge=secrets.choice(CHALLENGES) if (purpose == "attendance" and (require_challenge or liveness_policy == "strict")) else None,
                 employee_id=employee_id,
                 require_challenge=require_challenge,
                 pad_threshold=pad_threshold or settings.pad_live_threshold,
                 accept_threshold=accept_threshold or settings.match_accept_threshold,
                 consent_version=consent_version,
                 bound_employee_id=bound_employee_id,
+                liveness_policy=liveness_policy,
             )
             if s.challenge is None:
                 s.challenge_state = "passed"
@@ -141,6 +144,7 @@ class SessionManager:
             "poses": list(ENROL_POSES) if s.purpose == "enrolment" else None,
             "required_poses": list(REQUIRED_POSES) if s.purpose == "enrolment" else None,
             "bound": s.bound_employee_id is not None,
+            "liveness_policy": s.liveness_policy,
         }
 
     def rate_ok(self, s: Session) -> bool:
@@ -187,7 +191,7 @@ class SessionManager:
         enough_pad = len(s.live_probs) >= settings.pad_min_frames
         enough_emb = len(s.embeddings) >= settings.embed_min_frames
         # Step-up: passive evidence is neither clearly live nor clearly a spoof → ask for a head turn once.
-        if enough_pad and s.challenge is None and settings.pad_spoof_threshold <= live_avg < s.pad_threshold and len(s.live_probs) >= settings.pad_min_frames * 2:
+        if s.liveness_policy == "passive" and enough_pad and s.challenge is None and settings.pad_spoof_threshold <= live_avg < s.pad_threshold and len(s.live_probs) >= settings.pad_min_frames * 2:
             s.challenge = secrets.choice(CHALLENGES)
             s.challenge_state = "pending"
             s.stepped_up = True
@@ -195,14 +199,16 @@ class SessionManager:
         # A frozen or injected stream shows no natural micro-motion at all; a real face always does.
         if len(s.landmark_history) >= 8 and self._motion_px(s) < 0.35:
             return self._finish(s, {"state": "rejected", "reason": "spoof", "message": "No natural movement was detected. Please use the live camera.", "liveness_score": live_avg})
-        passive_ok = enough_pad and live_avg >= s.pad_threshold
+        moving = len(s.landmark_history) >= settings.motion_min_frames and self._motion_px(s) >= 0.25
+        advisory = s.liveness_policy == "advisory"
+        passive_ok = advisory or (enough_pad and live_avg >= s.pad_threshold)
         stepup_ok = s.stepped_up and s.challenge_state == "passed" and live_avg >= settings.pad_spoof_threshold
-        if enough_pad and live_avg < settings.pad_spoof_threshold and len(s.live_probs) >= settings.pad_reject_min_frames:
+        if not advisory and enough_pad and live_avg < settings.pad_spoof_threshold and len(s.live_probs) >= settings.pad_reject_min_frames:
             return self._finish(s, {"state": "rejected", "reason": "spoof", "message": "Liveness check failed. Please use the live camera, not a photo or screen.",
                                     "liveness_score": live_avg})
         if s.challenge_state == "failed":
             return self._finish(s, {"state": "rejected", "reason": "challenge_failed", "message": "Head-turn check was not completed.", "liveness_score": live_avg})
-        if enough_emb and (passive_ok or stepup_ok) and (s.stepped_up or s.challenge_state == "passed"):
+        if enough_emb and moving and (passive_ok or stepup_ok) and (s.stepped_up or s.challenge_state == "passed"):
             return self._identify(s, live_avg)
         if s.age > settings.verify_session_ttl_seconds - 5:
             return self._finish(s, {"state": "rejected", "reason": "timeout", "message": "Verification timed out. Please try again.", "liveness_score": live_avg})
@@ -288,8 +294,8 @@ class SessionManager:
         frontal = abs(yaw) < 14 and abs(pitch) < 16
         ok_pose = {
             "front": frontal,
-            "front_2": frontal and s.frames - s.last_capture_frame >= 3,
-            "front_3": frontal and s.frames - s.last_capture_frame >= 3,
+            "front_2": frontal and s.frames - s.last_capture_frame >= 2,
+            "front_3": frontal and s.frames - s.last_capture_frame >= 2,
             "left": 8 < yaw < 38,
             "right": -38 < yaw < -8,
         }[target]

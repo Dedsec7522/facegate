@@ -24,6 +24,8 @@ class OrgSettings:
     match_accept_threshold: float
     pad_live_threshold: float
     require_challenge: bool
+    kiosk_liveness: str  # advisory | passive | strict
+    portal_liveness: str  # advisory | passive | strict
     adaptive_templates: bool
     consent_version: str
 
@@ -43,7 +45,9 @@ def defaults() -> OrgSettings:
         auto_close_after_hours=settings.auto_close_after_hours,
         match_accept_threshold=settings.match_accept_threshold,
         pad_live_threshold=settings.pad_live_threshold,
-        require_challenge=False,  # fast passive liveness by default; the head-turn is a step-up when evidence is uncertain
+        require_challenge=False,
+        kiosk_liveness="passive",  # anonymous 1:N: passive PAD gate with a head-turn step-up when uncertain
+        portal_liveness="advisory",  # signed-in 1:1: identify instantly; PAD is logged, a frozen stream is still rejected
         adaptive_templates=True,
         consent_version="2026-11",
     )

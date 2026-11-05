@@ -200,7 +200,7 @@ function VerifyDialog({ open, action, employeeName, onClose, onRecorded }: { ope
     }
   }, [action, onRecorded])
 
-  const stream = useVerificationStream({ purpose: 'attendance', selfBound: true, grabFrame: cam.grabFrame, fps: 6, onTerminal })
+  const stream = useVerificationStream({ purpose: 'attendance', selfBound: true, grabFrame: cam.grabFrame, fps: 10, onTerminal })
   const { start, stop, phase: streamPhase } = stream
 
   useEffect(() => {

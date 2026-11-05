@@ -40,7 +40,7 @@ export default function Kiosk() {
     setResult(fb)
     setScreen(fb.state === 'identified' ? 'identified' : 'failed')
   }, [])
-  const stream = useVerificationStream({ purpose: 'attendance', grabFrame: cam.grabFrame, fps: 6, onTerminal })
+  const stream = useVerificationStream({ purpose: 'attendance', grabFrame: cam.grabFrame, fps: 10, onTerminal })
   const { start: streamStart, stop: streamStop } = stream
 
   const begin = useCallback(() => {

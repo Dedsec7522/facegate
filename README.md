@@ -74,6 +74,8 @@ cd ../frontend && npm run build                                   # tsc + Vite p
 
 Results from the development machine are recorded in [docs/05-test-and-benchmark-results.md](docs/05-test-and-benchmark-results.md).
 
+Liveness policy is per channel (*Settings → Verification*): the signed-in portal defaults to **advisory** (instant, ~0.5 s), the anonymous kiosk to **passive** (anti-spoof gate with a head-turn only when unsure), and **strict** forces a head turn everywhere.
+
 ## 5. Configuration
 
 All settings are environment variables (see `backend/.env.example`). Attendance rules and verification thresholds can also be changed at runtime by an administrator under *Settings & Security* and are stored in the database.
@@ -82,7 +84,7 @@ All settings are environment variables (see `backend/.env.example`). Attendance 
 |---|---|---|
 | `MATCH_ACCEPT_THRESHOLD` | 0.42 | cosine similarity required to identify; below → `unknown` |
 | `MATCH_MARGIN` | 0.08 | required gap to the second-best identity; smaller → `ambiguous` |
-| `PAD_LIVE_THRESHOLD` | 0.50 | median live-probability that passes on passive evidence alone (typical live check ≈ 0.5–1 s) |
+| `PAD_LIVE_THRESHOLD` | 0.45 | median live-probability that passes on passive evidence alone (typical live check ≈ 0.5–1 s) |
 | `PAD_SPOOF_THRESHOLD` | 0.20 | below this the session is rejected; between the two thresholds the server asks for a one-off head turn (step-up) |
 | `PAD_REJECT_MIN_FRAMES` | 14 | frames of evidence before a session is rejected as spoof |
 | `INFERENCE_DEVICE` | cpu | CPU only — no GPU is used or required |
