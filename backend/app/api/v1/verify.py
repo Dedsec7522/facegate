@@ -107,7 +107,8 @@ async def stream(ws: WebSocket, session_id: str):
             if not data:
                 continue
             if not manager.rate_ok(s):
-                continue  # drop frames above the allowed rate
+                await ws.send_json({"state": "throttled", "frame": s.frames})  # the client waits for a reply per frame; never drop silently
+                continue
             if pipe.busy:
                 await ws.send_json({"state": "busy", "guidance": "The system is busy — hold still", "frame": s.frames})
                 continue
@@ -189,7 +190,10 @@ async def enrol_stream(ws: WebSocket, session_id: str):
                     await ws.send_json({"state": "restarted"})
                 continue
             data = msg.get("bytes")
-            if not data or not manager.rate_ok(s):
+            if not data:
+                continue
+            if not manager.rate_ok(s):
+                await ws.send_json({"state": "throttled", "frame": s.frames})
                 continue
             if pipe.busy:
                 await ws.send_json({"state": "busy", "guidance": "The system is busy — hold still", "frame": s.frames})

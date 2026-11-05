@@ -46,7 +46,7 @@ def defaults() -> OrgSettings:
         match_accept_threshold=settings.match_accept_threshold,
         pad_live_threshold=settings.pad_live_threshold,
         require_challenge=False,
-        kiosk_liveness="passive",  # anonymous 1:N: passive PAD gate with a head-turn step-up when uncertain
+        kiosk_liveness="advisory",  # instant by default; switch to passive/strict in Settings for anti-spoof gating
         portal_liveness="advisory",  # signed-in 1:1: identify instantly; PAD is logged, a frozen stream is still rejected
         adaptive_templates=True,
         consent_version="2026-11",

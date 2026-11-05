@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     access_token_minutes: int = 15
     refresh_token_days: int = 7
     verification_token_seconds: int = 90
-    verify_session_ttl_seconds: int = 120
+    verify_session_ttl_seconds: int = 60  # fail fast with a clear reason instead of a long silent wait
     login_max_attempts: int = 5
     login_lockout_minutes: int = 15
 
@@ -47,8 +47,8 @@ class Settings(BaseSettings):
     pad_min_frames: int = 3
     embed_min_frames: int = 3
     motion_min_frames: int = 5  # frames of landmark history needed before the frozen-stream check can pass
-    min_face_size: int = 110
-    max_stream_fps: float = 10.0
+    min_face_size: int = 80  # px in the streamed frame; ~1 m from a laptop webcam
+    max_stream_fps: float = 15.0  # server cap sits above the 10 fps clients send
     verify_sessions_per_minute: int = 120  # per client IP; raise behind a shared office NAT
     keep_enrol_thumbnail: bool = True
 

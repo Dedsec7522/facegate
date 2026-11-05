@@ -58,11 +58,11 @@ def assess(bgr: np.ndarray, face: Face, *, min_size: int | None = None, max_yaw:
         issues.append("too_small")
     if x < 0 or y < 0 or x + w > W or y + h > H:
         issues.append("partially_out_of_frame")
-    if brightness < 55:
+    if brightness < 40:
         issues.append("too_dark")
     elif brightness > 225:
         issues.append("too_bright")
-    if sharpness < 25:
+    if sharpness < 18:
         issues.append("blurry")
     if abs(yaw) > max_yaw:
         issues.append("turned")

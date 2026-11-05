@@ -193,7 +193,7 @@ export interface VerifySession {
 }
 
 export interface FrameFeedback {
-  state: 'no_face' | 'multiple_faces' | 'quality' | 'ok' | 'collecting' | 'identified' | 'rejected' | 'busy' | 'error' | 'complete' | 'saved' | 'restarted'
+  state: 'no_face' | 'multiple_faces' | 'quality' | 'ok' | 'collecting' | 'identified' | 'rejected' | 'busy' | 'throttled' | 'error' | 'complete' | 'saved' | 'restarted'
   frame?: number
   face?: { box: [number, number, number, number]; landmarks: [number, number][]; score: number } | null
   faces?: number

@@ -43,7 +43,7 @@ export function useVerificationStream({ purpose, selfBound = false, employeeId, 
   const send = useCallback(async () => {
     const sock = ws.current
     if (!sock || sock.readyState !== WebSocket.OPEN || awaiting.current) return
-    const blob = await grabFrame(640, 0.8)
+    const blob = await grabFrame(800, 0.8)
     if (!blob || !ws.current || ws.current.readyState !== WebSocket.OPEN) return
     awaiting.current = true
     stats.current.sent++
@@ -62,7 +62,7 @@ export function useVerificationStream({ purpose, selfBound = false, employeeId, 
         : await api.post<VerifySession>('/verify/enrolment-sessions', undefined, { employee_id: employeeId!, consent: true })
       setSession(s)
       // The server knows the frame size we send (640 max side); the stage needs it to scale boxes.
-      const probe = await grabFrame(640, 0.5)
+      const probe = await grabFrame(800, 0.5)
       if (probe) {
         const bmp = await createImageBitmap(probe)
         setSentSize({ width: bmp.width, height: bmp.height })
@@ -79,6 +79,7 @@ export function useVerificationStream({ purpose, selfBound = false, employeeId, 
       sock.onmessage = (ev) => {
         awaiting.current = false
         const fb = JSON.parse(ev.data) as FrameFeedback
+        if (fb.state === 'throttled') return  // server acknowledged a frame it skipped; keep the last real feedback
         setFeedback(fb)
         if (fb.state === 'identified' || fb.state === 'rejected' || fb.state === 'saved' || (fb.state === 'error' && fb.reason)) {
           window.clearInterval(timer.current)

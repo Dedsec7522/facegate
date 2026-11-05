@@ -43,9 +43,9 @@ def test_quality_gates(pipe, faces):
     dark = cv2.convertScaleAbs(img, alpha=0.25, beta=0)
     a = pipe.analyse(dark)
     assert a.state in ("quality", "no_face") and (a.quality is None or "too_dark" in a.quality.issues)
-    small = cv2.resize(img, (120, 120))
+    small = cv2.resize(img, (90, 90))  # face ~60 px: below the 80 px minimum
     canvas = np.full((480, 640, 3), 128, np.uint8)
-    canvas[180:300, 260:380] = small
+    canvas[195:285, 275:365] = small
     a = pipe.analyse(canvas)
     assert a.state in ("quality", "no_face")
 
