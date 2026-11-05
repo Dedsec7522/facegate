@@ -1,6 +1,15 @@
 @import "tailwindcss";
 @import "@fontsource-variable/inter";
 
+/* `dark:` utilities follow the app's theme switch (and `.theme-dark` subtrees such as the kiosk),
+   not the OS setting on its own — otherwise light mode on a dark OS would mix both palettes. */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *, .theme-dark, .theme-dark *) { @slot; }
+  @media (prefers-color-scheme: dark) {
+    &:where([data-theme="system"], [data-theme="system"] *) { @slot; }
+  }
+}
+
 /* ---------- FaceGate design tokens (Swiss / minimal enterprise) ---------- */
 @theme {
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;

@@ -1,13 +1,23 @@
 import { format, formatDistanceToNowStrict, parseISO } from 'date-fns'
 
+/** Local wall-clock time in the 12-hour style of the HR portal, e.g. "12:13 PM". */
 export function fmtTime(iso: string | null | undefined): string {
   if (!iso) return '—'
-  return format(parseISO(iso), 'HH:mm')
+  return format(parseISO(iso), 'hh:mm a')
+}
+
+/** Minutes after midnight → "10:47 AM". Used for averaged times, which have no date. */
+export function fmtClock(minutes: number | null | undefined): string {
+  if (minutes === null || minutes === undefined) return '—'
+  const h24 = Math.floor(minutes / 60) % 24
+  const m = minutes % 60
+  const h12 = h24 % 12 || 12
+  return `${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${h24 < 12 ? 'AM' : 'PM'}`
 }
 
 export function fmtDateTime(iso: string | null | undefined): string {
   if (!iso) return '—'
-  return format(parseISO(iso), 'd MMM yyyy, HH:mm')
+  return format(parseISO(iso), 'd MMM yyyy, hh:mm a')
 }
 
 export function fmtDate(iso: string | null | undefined, pattern = 'EEE d MMM'): string {

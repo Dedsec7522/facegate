@@ -1,16 +1,16 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'motion/react'
-import { CalendarDays, CheckCircle2, Clock, LogIn, LogOut, ScanFace, ShieldCheck, UserX, XCircle } from 'lucide-react'
+import { AlarmClockCheck, CalendarDays, CheckCircle2, Clock, ClockArrowDown, ClockArrowUp, LogIn, LogOut, ScanFace, ShieldCheck, TriangleAlert, UserX, XCircle } from 'lucide-react'
 import { api, ApiError } from '../../lib/api'
-import { fmtDate, fmtMinutes, fmtTime } from '../../lib/format'
+import { fmtClock, fmtDate, fmtMinutes, fmtTime } from '../../lib/format'
 import { itemVariants, listVariants, spring } from '../../lib/motion'
-import type { AttendanceAction, AttendanceDay, AttendanceEvent, FrameFeedback, Page } from '../../lib/types'
+import type { AttendanceAction, AttendanceDay, AttendanceEvent, FrameFeedback, MyInsights, Page } from '../../lib/types'
 import { Badge, StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Card, CardBody, CardHeader } from '../../components/ui/Card'
 import { Dialog } from '../../components/ui/Dialog'
-import { Avatar, EmptyState, PageHeader, Skeleton } from '../../components/ui/Misc'
+import { Avatar, CountUp, EmptyState, PageHeader, Skeleton } from '../../components/ui/Misc'
 import { CameraStage, type StageMode } from '../../components/camera/CameraStage'
 import { useCamera } from '../../components/camera/useCamera'
 import { useVerificationStream } from '../../components/camera/useVerificationStream'
@@ -54,6 +54,7 @@ export default function Portal() {
   const days = useQuery({ queryKey: ['me', 'days', from], queryFn: () => api.get<Page<AttendanceDay>>('/attendance/me/days', { date_from: from, page_size: 31 }), enabled: status.isSuccess })
   const [selected, setSelected] = useState<string | null>(null)
   const events = useQuery({ queryKey: ['me', 'events', selected], queryFn: () => api.get<AttendanceEvent[]>('/attendance/me/events', { attendance_date: selected }), enabled: !!selected })
+  const insights = useQuery({ queryKey: ['me', 'insights'], queryFn: () => api.get<MyInsights>('/attendance/me/insights', { days: 30 }), enabled: status.isSuccess })
   const [verifyOpen, setVerifyOpen] = useState(false)
   const [photoOk, setPhotoOk] = useState(true)
 
@@ -77,9 +78,6 @@ export default function Portal() {
   }
 
   const summary = days.data?.items ?? []
-  const present = summary.filter((d) => d.status !== 'absent').length
-  const late = summary.filter((d) => d.late_minutes > 0).length
-  const hours = summary.reduce((a, d) => a + d.worked_minutes, 0)
   const action: AttendanceAction = s?.next.next ?? 'check_in'
 
   return (
@@ -90,44 +88,51 @@ export default function Portal() {
         <Card><EmptyState title="Could not load your status" description={(status.error as Error).message} /></Card>
       ) : s && (
         <motion.div variants={listVariants} initial="hidden" animate="show" className="space-y-4">
-          {/* ---- Today's attendance card (login / logout from office) ---- */}
-          <motion.div variants={itemVariants} className="card overflow-hidden">
-            <div className="flex items-center justify-between px-6 pt-5">
-              <h2 className="text-lg font-semibold">Today's attendance</h2>
-              {isOpen ? <Badge tone="success" dot>Present</Badge> : s.today?.last_out ? <Badge tone="info" dot>Left office</Badge> : <Badge tone="neutral" dot>Out of office</Badge>}
-            </div>
-            <div className="mx-6 mt-4 grid h-44 place-items-center overflow-hidden rounded-xl bg-brand-50 dark:bg-brand-800/30">
-              {photoOk && s.employee.enrolled ? (
-                <img src="/api/v1/attendance/me/thumbnail" alt={`Enrolled photo of ${s.employee.name}`} className="h-full w-auto object-cover" onError={() => setPhotoOk(false)} />
-              ) : (
-                <Avatar name={s.employee.name} size="xl" />
-              )}
-            </div>
-            <dl className="mx-6 mt-5 grid grid-cols-3 gap-4 text-sm">
-              <div><dt className="text-ink-3">Check-in time</dt><dd className="tabular mt-0.5 text-lg font-semibold text-brand-700 dark:text-brand-200">{fmtTime(s.today?.first_in)}</dd></div>
-              <div><dt className="text-ink-3">Check-out time</dt><dd className="tabular mt-0.5 text-lg font-semibold text-brand-700 dark:text-brand-200">{fmtTime(s.today?.last_out)}</dd></div>
-              <div><dt className="text-ink-3">{isOpen ? 'Worked so far' : 'Worked today'}</dt><dd className="tabular mt-0.5 text-lg font-semibold">{fmtMinutes(liveMinutes)}</dd></div>
-            </dl>
-            <div className="mx-6 mt-5 border-t border-line pt-5 pb-6">
-              <Button size="xl" variant={action === 'check_in' ? 'primary' : 'accent'} className="w-full" onClick={() => setVerifyOpen(true)} disabled={!s.employee.enrolled}
-                leftIcon={action === 'check_in' ? <LogIn className="size-5" /> : <LogOut className="size-5" />}>
-                {action === 'check_in' ? 'Login from Office' : 'Logout from Office'}
-              </Button>
-              <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-xs text-ink-3">
-                <ShieldCheck className="size-3.5" aria-hidden />
-                {s.employee.enrolled ? `Verified with your face — only ${s.employee.name.split(' ')[0]}'s enrolled face can log this account in or out.` : 'Your face is not enrolled yet. Ask an administrator to enrol you before using this button.'}
-              </p>
-            </div>
-          </motion.div>
-
-          <motion.div variants={itemVariants} className="grid gap-4 sm:grid-cols-3">
-            {[{ l: 'Days present this month', v: String(present), i: <CalendarDays className="size-4" /> }, { l: 'Late arrivals', v: String(late), i: <Clock className="size-4" /> }, { l: 'Hours worked', v: fmtMinutes(hours), i: <Clock className="size-4" /> }].map((x) => (
-              <div key={x.l} className="card flex items-center gap-3 p-4">
-                <span className="grid size-9 place-items-center rounded-lg bg-surface-3 text-ink-2">{x.i}</span>
-                <div><p className="text-xs text-ink-3">{x.l}</p><p className="tabular text-lg font-semibold">{x.v}</p></div>
+          {/* ---- Today's attendance + insights (mirrors the HR portal layout) ---- */}
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+            <motion.section variants={itemVariants} className="card flex flex-col overflow-hidden" aria-labelledby="today-h">
+              <div className="flex items-center justify-between px-6 pt-5">
+                <h2 id="today-h" className="text-lg font-semibold">Today's Attendance</h2>
+                {isOpen ? <Badge tone="success">Present</Badge> : s.today?.last_out ? <Badge tone="info">Left office</Badge> : <Badge tone="neutral">Out of office</Badge>}
               </div>
-            ))}
-          </motion.div>
+              <div className="mx-6 mt-4 border-t border-line" />
+              <motion.div layout className="mx-6 mt-5 grid h-44 place-items-center overflow-hidden rounded-xl bg-brand-100/70 dark:bg-brand-800/30">
+                {photoOk && s.employee.enrolled ? (
+                  <motion.img initial={{ opacity: 0, scale: 1.04 }} animate={{ opacity: 1, scale: 1 }} transition={spring.gentle} src="/api/v1/attendance/me/thumbnail" alt={`Enrolled photo of ${s.employee.name}`} className="h-full w-auto object-cover" onError={() => setPhotoOk(false)} />
+                ) : (
+                  <Avatar name={s.employee.name} size="xl" />
+                )}
+              </motion.div>
+              <dl className="mx-6 mt-5 flex items-start justify-between gap-4 text-sm">
+                <div><dt className="text-xs text-ink-3">Check In Time</dt><dd className="tabular mt-1 text-lg font-bold text-brand-700 dark:text-brand-200">{fmtTime(s.today?.first_in)}</dd></div>
+                <div className="text-right"><dt className="text-xs text-ink-3">Check Out Time</dt><dd className="tabular mt-1 text-lg font-bold text-brand-700 dark:text-brand-200">{fmtTime(s.today?.last_out)}</dd></div>
+              </dl>
+              <div className="mx-6 mt-4 border-t border-line" />
+              <div className="mx-6 mt-auto pt-4 pb-6">
+                <p className="mb-3 text-center text-xs text-ink-3">{isOpen ? 'Worked so far' : 'Worked today'} <span className="tabular font-semibold text-ink">{fmtMinutes(liveMinutes)}</span></p>
+                <Button size="xl" variant={action === 'check_in' ? 'primary' : 'accent'} className="w-full" onClick={() => setVerifyOpen(true)} disabled={!s.employee.enrolled}
+                  leftIcon={action === 'check_in' ? <LogIn className="size-5" /> : <LogOut className="size-5" />}>
+                  {action === 'check_in' ? 'Login from Office' : 'Logout from Office'}
+                </Button>
+                <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-xs text-ink-3">
+                  <ShieldCheck className="size-3.5 shrink-0" aria-hidden />
+                  {s.employee.enrolled ? `Verified with your face — only ${s.employee.name.split(' ')[0]}'s enrolled face can log this account in or out.` : 'Your face is not enrolled yet. Ask an administrator to enrol you before using this button.'}
+                </p>
+              </div>
+            </motion.section>
+
+            <motion.section variants={itemVariants} className="card px-6 pt-5 pb-6" aria-labelledby="insights-h">
+              <div className="flex items-baseline justify-between gap-3">
+                <h2 id="insights-h" className="text-lg font-semibold">Your Attendance Insights</h2>
+                <span className="text-xs text-ink-3">Last {insights.data?.window_days ?? 30} days</span>
+              </div>
+              {insights.isLoading ? (
+                <div className="mt-5 grid gap-4 sm:grid-cols-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-2xl" />)}</div>
+              ) : insights.isError ? (
+                <EmptyState title="Insights unavailable" description={(insights.error as Error).message} />
+              ) : insights.data && <InsightTiles data={insights.data} />}
+            </motion.section>
+          </div>
 
           <motion.div variants={itemVariants}>
             <Card>
@@ -175,6 +180,61 @@ export default function Portal() {
         )}
       </Dialog>
     </>
+  )
+}
+
+
+type InsightTone = 'purple' | 'sky' | 'indigo' | 'green' | 'red'
+const TILE_TONES: Record<InsightTone, { bg: string; icon: string; value: string; label: string }> = {
+  purple: { bg: 'bg-brand-100/70 dark:bg-brand-800/30', icon: 'text-brand-700 dark:text-brand-200', value: 'text-brand-800 dark:text-brand-100', label: 'text-brand-700/80 dark:text-brand-200/80' },
+  sky: { bg: 'bg-sky-100/70 dark:bg-sky-900/30', icon: 'text-sky-600 dark:text-sky-300', value: 'text-sky-600 dark:text-sky-200', label: 'text-sky-700/80 dark:text-sky-200/80' },
+  indigo: { bg: 'bg-indigo-100/70 dark:bg-indigo-900/30', icon: 'text-indigo-600 dark:text-indigo-300', value: 'text-indigo-600 dark:text-indigo-200', label: 'text-indigo-700/80 dark:text-indigo-200/80' },
+  green: { bg: 'bg-emerald-100/70 dark:bg-emerald-900/30', icon: 'text-emerald-700 dark:text-emerald-300', value: 'text-emerald-700 dark:text-emerald-200', label: 'text-emerald-800/80 dark:text-emerald-200/80' },
+  red: { bg: 'bg-red-100/70 dark:bg-red-900/30', icon: 'text-red-600 dark:text-red-300', value: 'text-red-600 dark:text-red-200', label: 'text-red-700/80 dark:text-red-200/80' },
+}
+
+function InsightTile({ tone, icon, label, children, hint, index }: { tone: InsightTone; icon: ReactNode; label: string; children: ReactNode; hint?: string; index: number }) {
+  const t = TILE_TONES[tone]
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 14, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ ...spring.gentle, delay: 0.05 * index }}
+      whileHover={{ y: -3 }} title={hint}
+      className={cn('flex items-center gap-3.5 rounded-2xl p-4 shadow-[0_1px_0_rgba(109,40,217,0.04)]', t.bg)}
+    >
+      <motion.span initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ ...spring.snappy, delay: 0.05 * index + 0.12 }}
+        className={cn('grid size-12 shrink-0 place-items-center rounded-full bg-white shadow-sm dark:bg-surface', t.icon)} aria-hidden>
+        {icon}
+      </motion.span>
+      <div className="min-w-0">
+        <p className={cn('text-[13px] font-medium leading-snug', t.label)}>{label}</p>
+        <p className={cn('mt-0.5 text-2xl font-bold leading-tight tracking-tight', t.value)}>{children}</p>
+      </div>
+    </motion.div>
+  )
+}
+
+function InsightTiles({ data }: { data: MyInsights }) {
+  const avgH = data.avg_daily_minutes === null ? null : Math.floor(data.avg_daily_minutes / 60)
+  const avgM = data.avg_daily_minutes === null ? null : data.avg_daily_minutes % 60
+  const n = data.days_present
+  return (
+    <div className="mt-5 grid gap-3.5 sm:grid-cols-2">
+      <InsightTile index={0} tone="purple" icon={<Clock className="size-6" />} label="Average Daily Hours" hint={`Across ${n} completed day${n === 1 ? '' : 's'}`}>
+        {avgH === null ? '—' : <>{avgH}h {String(avgM).padStart(2, '0')}m</>}
+      </InsightTile>
+      <InsightTile index={1} tone="sky" icon={<ClockArrowUp className="size-6" />} label="Average Check-In Time" hint={`Local time (${data.timezone})`}>
+        {fmtClock(data.avg_check_in_minutes)}
+      </InsightTile>
+      <InsightTile index={2} tone="indigo" icon={<ClockArrowDown className="size-6" />} label="Average Check-Out Time" hint={`Local time (${data.timezone})`}>
+        {fmtClock(data.avg_check_out_minutes)}
+      </InsightTile>
+      <InsightTile index={3} tone="green" icon={<AlarmClockCheck className="size-6" />} label="On-Time Arrival Rate" hint={`${n - data.late_days} of ${n} days on time`}>
+        {data.on_time_rate === null ? '—' : <CountUp value={Math.round(data.on_time_rate * 100)} suffix="%" />}
+      </InsightTile>
+      <InsightTile index={4} tone="red" icon={<TriangleAlert className="size-6" />} label="Black Points" hint={`${data.late_days} late arrival${data.late_days === 1 ? '' : 's'} + ${data.missing_checkouts} missed logout${data.missing_checkouts === 1 ? '' : 's'}`}>
+        <CountUp value={data.black_points} />
+      </InsightTile>
+    </div>
   )
 }
 

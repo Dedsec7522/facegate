@@ -324,6 +324,46 @@ async def my_days(date_from: date | None = None, date_to: date | None = None, pa
     return Page(items=[_day_out(r, emp, None) for r in rows], total=total, page=page, page_size=page_size)
 
 
+@router.get("/me/insights")
+async def my_insights(days: int = Query(30, ge=7, le=365), db: AsyncSession = Depends(get_db), user: UserAccount = Depends(get_current_user)):
+    """Rolling-window attendance statistics for the signed-in employee (times averaged in the organisation's local time)."""
+    if not user.employee_id:
+        raise HTTPException(404, "No employee profile linked to this account")
+    from zoneinfo import ZoneInfo
+
+    org = await get_org_settings(db)
+    tz = ZoneInfo(org.timezone)
+    today = attendance_date_for(datetime.now(timezone.utc), org)
+    since = today - timedelta(days=days - 1)
+    rows = (await db.execute(select(AttendanceDay).where(AttendanceDay.employee_id == user.employee_id, AttendanceDay.attendance_date >= since,
+                                                        AttendanceDay.attendance_date <= today))).scalars().all()
+
+    def _mod(ts: datetime | None) -> int | None:
+        if ts is None:
+            return None
+        local = (ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)).astimezone(tz)
+        return local.hour * 60 + local.minute
+
+    present = [r for r in rows if r.status != "absent" and r.first_in is not None]
+    ins = [m for m in (_mod(r.first_in) for r in present) if m is not None]
+    outs = [m for m in (_mod(r.last_out) for r in present if r.last_out is not None) if m is not None]
+    worked = [r.worked_minutes for r in present if r.worked_minutes > 0 and not r.is_open]
+    late_days = sum(1 for r in present if r.late_minutes > 0)
+    missing = sum(1 for r in rows if r.status == "missing_checkout")
+    on_time = (len(present) - late_days) / len(present) if present else None
+    return {
+        "window_days": days, "from": since.isoformat(), "to": today.isoformat(), "timezone": org.timezone,
+        "days_present": len(present), "late_days": late_days, "missing_checkouts": missing,
+        "avg_daily_minutes": round(sum(worked) / len(worked)) if worked else None,
+        "avg_check_in_minutes": round(sum(ins) / len(ins)) if ins else None,
+        "avg_check_out_minutes": round(sum(outs) / len(outs)) if outs else None,
+        "on_time_rate": on_time,
+        # Penalty points, as in the HR portal: one per late arrival and one per missed logout.
+        "black_points": late_days + missing,
+        "total_minutes": sum(r.worked_minutes for r in present),
+    }
+
+
 @router.get("/me/events", response_model=list[AttendanceEventOut])
 async def my_events(attendance_date: date, db: AsyncSession = Depends(get_db), user: UserAccount = Depends(get_current_user)):
     if not user.employee_id:

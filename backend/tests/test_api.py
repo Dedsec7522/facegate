@@ -21,6 +21,11 @@ async def test_rbac_employee_cannot_access_admin(client: AsyncClient):
     assert (await client.get("/api/v1/employees")).status_code == 403
     assert (await client.get("/api/v1/audit")).status_code == 403
     assert (await client.get("/api/v1/attendance/me/status")).status_code == 200
+    ins = await client.get("/api/v1/attendance/me/insights", params={"days": 30})
+    assert ins.status_code == 200
+    body = ins.json()
+    assert body["window_days"] == 30 and body["black_points"] == 0 and body["days_present"] == 0
+    assert body["avg_check_in_minutes"] is None and body["on_time_rate"] is None
 
 
 async def test_employee_crud_and_audit(admin_client: AsyncClient):

@@ -93,6 +93,22 @@ export interface AttendanceDay {
   is_open: boolean
 }
 
+export interface MyInsights {
+  window_days: number
+  from: string
+  to: string
+  timezone: string
+  days_present: number
+  late_days: number
+  missing_checkouts: number
+  avg_daily_minutes: number | null
+  avg_check_in_minutes: number | null
+  avg_check_out_minutes: number | null
+  on_time_rate: number | null
+  black_points: number
+  total_minutes: number
+}
+
 export interface TodayBoard {
   summary: { date: string; total: number; present: number; late: number; absent: number; on_site: number; missing_checkout: number }
   items: Array<{
