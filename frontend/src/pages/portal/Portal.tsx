@@ -15,6 +15,7 @@ import { CameraStage, type StageMode } from '../../components/camera/CameraStage
 import { useCamera } from '../../components/camera/useCamera'
 import { useVerificationStream } from '../../components/camera/useVerificationStream'
 import { cn } from '../../lib/cn'
+import { Welcome } from '../kiosk/Kiosk'
 
 interface MyStatus {
   employee: { id: string; name: string; code: string; enrolled: boolean }
@@ -249,8 +250,9 @@ function VerifyDialog({ open, action, employeeName, onClose, onRecorded }: { ope
                     <motion.path d="M5 12.5l4.5 4.5L19 7.5" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.45, ease: [0.25, 1, 0.5, 1], delay: 0.15 }} />
                   </svg>
                 </motion.span>
-                <p className="mt-3 text-xl font-semibold">{recorded.action === 'check_in' ? 'Logged in from office' : 'Logged out from office'}</p>
-                <p className="tabular mt-1 text-3xl font-semibold">{fmtTime(recorded.occurred_at)}</p>
+                <Welcome action={recorded.action} name={employeeName} className="mt-3 [&_h2]:text-2xl [&_p]:text-sm" />
+                <p className="tabular mt-2 text-3xl font-semibold">{fmtTime(recorded.occurred_at)}</p>
+                <p className="mt-1 text-xs text-ink-3">{recorded.action === 'check_in' ? 'Login time' : 'Logout time'}</p>
                 <p className="mt-1 text-xs text-ink-3">Recorded on the server · verified by face</p>
                 <Button className="mt-5" onClick={onClose}>Done</Button>
               </motion.div>

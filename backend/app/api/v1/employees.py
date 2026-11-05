@@ -187,12 +187,16 @@ async def create_account(emp_id: str, body: AccountCreateIn, request: Request, d
     if (await db.execute(select(UserAccount).where(UserAccount.email == e.email))).first():
         raise HTTPException(status.HTTP_409_CONFLICT, "An account with this email already exists")
     role = Role(body.role)
-    acc = UserAccount(email=e.email, password_hash=hash_password(body.password), role=role, employee_id=e.id)
+    # Employees sign in on the same screen as administrators: their employee code doubles as the username.
+    uname = e.employee_code.lower()
+    if (await db.execute(select(UserAccount).where(UserAccount.username == uname))).first():
+        uname = None
+    acc = UserAccount(email=e.email, username=uname, password_hash=hash_password(body.password), role=role, employee_id=e.id)
     db.add(acc)
     await db.flush()
     await audit(db, "account.create", actor=user, target_type="user", target_id=acc.id, detail={"email": acc.email, "role": role.value}, request=request)
     await db.commit()
-    return {"id": acc.id, "email": acc.email, "role": role.value}
+    return {"id": acc.id, "email": acc.email, "username": acc.username, "role": role.value}
 
 
 @router.delete("/employees/{emp_id}/biometrics", status_code=200)

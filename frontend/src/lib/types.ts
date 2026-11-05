@@ -211,6 +211,7 @@ export interface FrameFeedback {
   message?: string
   employee?: { id: string; name: string; code: string; department: string | null }
   token?: string
+  today?: { first_in: string | null; last_out: string | null; worked_minutes: number } | null
   next?: { next: AttendanceAction; last_event: { id: string; action: AttendanceAction; occurred_at: string; method: AttendanceMethod } | null; attendance_date: string }
   match_score?: number | null
   liveness_score?: number

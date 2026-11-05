@@ -43,17 +43,17 @@ export default function Login() {
         <Link to="/" className="relative flex items-center gap-2.5"><Logo className="size-8" /><span className="font-semibold">FaceGate</span></Link>
         <div className="relative max-w-md">
           <ShieldCheck className="mb-4 size-8 text-accent-400" aria-hidden />
-          <h2 className="text-2xl font-semibold">Administration console</h2>
-          <p className="mt-2 text-ink-2">Manage employees, enrol faces, review attendance and export reports. Access is role-based and every action is logged.</p>
+          <h2 className="text-2xl font-semibold">One sign-in for everyone</h2>
+          <p className="mt-2 text-ink-2">Employees land on their attendance portal; administrators and HR land on the console. Your username (employee code) or work email decides which.</p>
         </div>
-        <p className="relative text-xs text-ink-3">Employees do not need an account to check in — only to review their own history.</p>
+        <p className="relative text-xs text-ink-3">Every action is role-checked on the server and written to the audit log.</p>
       </div>
 
       <div className="flex items-center justify-center px-6 py-10">
         <motion.div variants={popVariants} initial="hidden" animate="show" className="w-full max-w-sm">
           <Link to="/" className="mb-8 inline-flex items-center gap-1.5 text-sm text-ink-3 hover:text-ink lg:hidden"><ArrowLeft className="size-4" /> Back</Link>
           <h1 className="text-2xl font-semibold">Sign in</h1>
-          <p className="mt-1 text-sm text-ink-3">Use your username or work email, and your password.</p>
+          <p className="mt-1 text-sm text-ink-3">Employee code or work email, and your password.</p>
 
           <form onSubmit={submit} className="mt-6 space-y-4" noValidate>
             <AnimatePresence mode="wait" initial={false}>

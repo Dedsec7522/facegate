@@ -118,13 +118,11 @@ export default function Kiosk() {
                 <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-accent-400">Identified</p>
                 <h2 className="mt-1 text-3xl font-semibold leading-tight">Hello, {result.employee.name.split(' ')[0]}</h2>
                 <p className="text-ink-3">{result.employee.name} · {result.employee.code}</p>
-                <p className="mt-4 text-sm text-ink-2">
-                  {result.next?.last_event ? <>Last event today: <strong>{result.next.last_event.action === 'check_in' ? 'checked in' : 'checked out'}</strong> at {fmtTime(result.next.last_event.occurred_at)}.</> : 'No attendance recorded yet today.'}
-                </p>
+                <TimesRow firstIn={result.today?.first_in} lastOut={result.today?.last_out} />
                 <div className="mt-6 grid gap-3">
-                  <ActionButton action="check_in" suggested={result.next?.next === 'check_in'} busy={busyAction} onClick={() => record('check_in')} />
-                  <ActionButton action="check_out" suggested={result.next?.next === 'check_out'} busy={busyAction} onClick={() => record('check_out')} />
+                  <ActionButton action={result.next?.next ?? 'check_in'} suggested busy={busyAction} onClick={() => record(result.next?.next ?? 'check_in')} />
                 </div>
+                <p className="mt-3 text-xs text-ink-3">{result.next?.next === 'check_in' ? 'You are not logged in yet, so only Login is offered.' : 'You are logged in, so only Logout is offered.'}</p>
                 {actionError && <p role="alert" className="mt-3 rounded-md border border-red-400/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">{actionError}</p>}
                 <p className="mt-4 text-xs text-ink-3">Not you? <button className="underline hover:text-ink" onClick={reset}>Cancel</button></p>
               </Panel>
@@ -133,10 +131,10 @@ export default function Kiosk() {
             {screen === 'recorded' && recorded && (
               <Panel key="recorded">
                 <motion.div initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={spring.snappy} className="grid size-16 place-items-center rounded-full bg-accent-500 text-white"><CheckCircle2 className="size-9" /></motion.div>
-                <h2 className="mt-5 text-3xl font-semibold leading-tight">{recorded.action === 'check_in' ? 'Checked in' : 'Checked out'}</h2>
-                <p className="mt-1 text-lg text-ink-2">{recorded.employee_name}</p>
+                <Welcome action={recorded.action} name={recorded.employee_name ?? ''} />
                 <p className="mt-4 text-5xl font-semibold tabular">{fmtTime(recorded.occurred_at)}</p>
-                <p className="mt-1 text-sm text-ink-3">Recorded on the server · method: {recorded.method}</p>
+                <TimesRow firstIn={recorded.action === 'check_in' ? recorded.occurred_at : result?.today?.first_in} lastOut={recorded.action === 'check_out' ? recorded.occurred_at : null} />
+                <p className="mt-3 text-sm text-ink-3">Recorded on the server · {recorded.method === 'face' ? 'verified by face' : `method: ${recorded.method}`}</p>
                 <Button variant="outline" className="mt-auto self-start border-line-2 bg-transparent text-ink" onClick={reset} leftIcon={<RefreshCw className="size-4" />}>Done</Button>
               </Panel>
             )}
@@ -228,9 +226,34 @@ function ActionButton({ action, suggested, busy, onClick }: { action: Attendance
   const Icon = action === 'check_in' ? LogIn : LogOut
   return (
     <Button size="xl" variant={suggested ? 'accent' : 'outline'} className={cn('w-full justify-between', !suggested && 'border-line-2 bg-transparent text-ink')} onClick={onClick} loading={busy === action} disabled={!!busy && busy !== action}>
-      <span className="flex items-center gap-3"><Icon className="size-5" />{action === 'check_in' ? 'Check in' : 'Check out'}</span>
-      {suggested && <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs font-medium">Suggested</span>}
+      <span className="flex items-center gap-3"><Icon className="size-5" />{action === 'check_in' ? 'Login from Office' : 'Logout from Office'}</span>
+      <ArrowRight className="size-5 opacity-80" />
     </Button>
+  )
+}
+
+function TimesRow({ firstIn, lastOut }: { firstIn?: string | null; lastOut?: string | null }) {
+  return (
+    <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+      <div className="rounded-xl border border-line bg-surface-3/60 px-4 py-3"><dt className="text-ink-3">Login time</dt><dd className="tabular mt-0.5 text-xl font-semibold">{fmtTime(firstIn)}</dd></div>
+      <div className="rounded-xl border border-line bg-surface-3/60 px-4 py-3"><dt className="text-ink-3">Logout time</dt><dd className="tabular mt-0.5 text-xl font-semibold">{fmtTime(lastOut)}</dd></div>
+    </dl>
+  )
+}
+
+/** Word-by-word greeting so the employee's name arrives with a little lift. */
+export function Welcome({ action, name, className }: { action: AttendanceAction; name: string; className?: string }) {
+  const first = name.split(' ')[0] || name
+  const words = (action === 'check_in' ? `Welcome, ${first}!` : `Goodbye, ${first} — see you soon`).split(' ')
+  return (
+    <div className={cn('mt-5', className)}>
+      <motion.h2 className="text-3xl font-semibold leading-tight" initial="hidden" animate="show" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.07, delayChildren: 0.15 } } }} aria-label={words.join(' ')}>
+        {words.map((w, i) => (
+          <motion.span key={i} className="mr-[0.3em] inline-block" variants={{ hidden: { opacity: 0, y: 14, filter: 'blur(4px)' }, show: { opacity: 1, y: 0, filter: 'blur(0px)', transition: { type: 'spring', stiffness: 320, damping: 26 } } }}>{w}</motion.span>
+        ))}
+      </motion.h2>
+      <motion.p className="mt-1 text-lg text-ink-2" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>{name}</motion.p>
+    </div>
   )
 }
 

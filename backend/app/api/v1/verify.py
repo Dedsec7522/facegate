@@ -3,15 +3,17 @@ from __future__ import annotations
 
 import json
 import time
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, require_staff
 from app.core.rate_limit import client_ip, limit, verify_session_limiter
 from app.core.security import create_access_token, create_verification_token, decode_token
 from app.db.base import SessionLocal, get_db
-from app.db.models import Employee, EmployeeStatus, Role, UserAccount, VerificationAttempt, VerificationOutcome
+from app.db.models import AttendanceDay, Employee, EmployeeStatus, Role, UserAccount, VerificationAttempt, VerificationOutcome
 from app.services.enrolment import EnrolmentError, add_adaptive_template, commit_enrolment
 from app.services.org_settings import get_org_settings
 from app.services.verification import manager
@@ -126,6 +128,9 @@ async def stream(ws: WebSocket, session_id: str):
 
                         org = await get_org_settings(db)
                         nxt = await next_expected_action(db, emp.id, org)
+                        day_row = (await db.execute(select(AttendanceDay).where(AttendanceDay.employee_id == emp.id, AttendanceDay.attendance_date == date.fromisoformat(nxt["attendance_date"])))).scalar_one_or_none()
+                        today = {"first_in": day_row.first_in.isoformat() if day_row and day_row.first_in else None, "last_out": day_row.last_out.isoformat() if day_row and day_row.last_out else None,
+                                 "worked_minutes": day_row.worked_minutes if day_row else 0} if day_row else None
                         # Adaptive templates: only after a confident, live-verified match with a clear margin.
                         if org.adaptive_templates and s.probe is not None and (s.result.get("match_score") or 0) >= 0.65 \
                                 and (s.result.get("second_score") or 0) < s.result["match_score"] - 0.15:
@@ -135,7 +140,7 @@ async def stream(ws: WebSocket, session_id: str):
                             except Exception:  # never let template maintenance break a check-in
                                 await db.rollback()
                     resp = {**resp, "attempt_id": att_id, "token": create_verification_token(s.id, emp.id, "face"),
-                            "employee": {"id": emp.id, "name": emp.full_name, "code": emp.employee_code, "department": None}, "next": nxt}
+                            "employee": {"id": emp.id, "name": emp.full_name, "code": emp.employee_code, "department": None}, "next": nxt, "today": today}
                 else:
                     resp = {**resp, "attempt_id": att_id}
             await ws.send_json(resp)
