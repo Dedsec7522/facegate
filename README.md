@@ -66,7 +66,7 @@ docker compose exec api python tools/seed.py --admin-username admin --admin-emai
 ## 4. Tests and benchmarks
 
 ```bash
-cd backend && .venv/Scripts/python -m pytest -q                 # 19 tests: engine, vision, API, e2e stream
+cd backend && .venv/Scripts/python -m pytest -q                 # 22 tests: engine, vision, API, e2e stream, bound verification
 .venv/Scripts/python benchmarks/latency.py                       # per-stage latency on this machine
 .venv/Scripts/python benchmarks/load_test.py --clients 300 --concurrency 10   # 300 sessions through 10 kiosks
 cd ../frontend && npm run build                                   # tsc + Vite production build
