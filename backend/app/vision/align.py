@@ -17,8 +17,20 @@ REFERENCE_112 = np.array(
 )
 
 
+# Intel face-reidentification-retail-0095 reference keypoints, normalised to [0,1] (Open Model Zoo model card),
+# in the same image-left-to-right order as REFERENCE_112 / YuNet's landmarks.
+REFERENCE_INTEL_UNIT = np.array(
+    [[0.31557, 0.46157], [0.68262, 0.46157], [0.50026, 0.64051], [0.34947, 0.82469], [0.65344, 0.82469]],
+    dtype=np.float32,
+)
+
+
 def align_face(bgr: np.ndarray, landmarks: np.ndarray, size: int = 112) -> np.ndarray:
-    ref = REFERENCE_112 * (size / 112.0)
+    return align_to(bgr, landmarks, REFERENCE_112 * (size / 112.0), size)
+
+
+def align_to(bgr: np.ndarray, landmarks: np.ndarray, ref: np.ndarray, size: int) -> np.ndarray:
+    """Similarity-warp the face so its 5 landmarks land on `ref` (pixel coordinates in a size×size crop)."""
     m, _ = cv2.estimateAffinePartial2D(landmarks.astype(np.float32), ref, method=cv2.LMEDS)
     if m is None:  # degenerate landmarks; fall back to a plain crop
         return cv2.resize(bgr, (size, size))

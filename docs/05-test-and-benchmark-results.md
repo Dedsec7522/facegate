@@ -88,3 +88,40 @@ These were **not** executed by the automated run and are not claimed:
 | Poor lighting | guidance "Find better lighting", no false accept | kiosk |
 
 Run `backend/benchmarks/load_test.py` again on the production server after deployment and replace §4 with those numbers.
+
+## 7. Face-model evaluation and throughput changes (2026-11-09)
+
+Machine: Intel i7-11800H (8 cores / 16 threads), Windows 10, ONNX Runtime 1.31, OpenVINO 2026.4. Only models whose licences permit commercial use were considered (InsightFace/ArcFace packs, SCRFD, EdgeFace and WebFace-trained AdaFace weights are non-commercial).
+
+**Accuracy — LFW, 6 000 pairs, through FaceGate's own YuNet detection + 5-point alignment** (0 detector misses):
+
+| Model | 10-fold acc. | AUC | TAR @ FAR 1 % | TAR @ FAR 0.1 % | Cost (1 thread) |
+|---|---|---|---|---|---|
+| **Intel face-reidentification-retail-0095** (OpenVINO, 256-d) | **99.50 ± 0.30 %** | **0.99958** | 99.50 % | **98.87 %** | **~11 ms** |
+| Intel 0095 + flip TTA | 99.47 % | 0.99956 | 99.60 % | 98.93 % | ~22 ms |
+| Intel 0095, detection at half resolution | 99.42 % | 0.99948 | 99.67 % | 99.03 % | ~11 ms |
+| SFace 2021dec + flip TTA (previous default) | 99.08 ± 0.54 % | 0.99861 | 99.13 % | 97.97 % | ~55 ms (ORT) / ~24 ms (OpenVINO) per pass ×2 |
+| SFace 2021dec, no flip | 98.93 % | 0.99835 | 99.00 % | 97.53 % | as above ×1 |
+| SFace int8 (OpenCV Zoo) | — | — | — | — | 413 ms on ORT (ConvInteger) — rejected |
+| ArcFace ResNet100 (ONNX Model Zoo, opset 8) | — | — | — | — | ~360 ms (OpenVINO) — rejected as too slow |
+
+**Threshold calibration** (all 29.6 M impostor and 8 101 genuine pairs among the 7 701 LFW evaluation images, single image vs single image):
+
+| Threshold | Intel FAR | Intel FRR | SFace+flip FAR | SFace+flip FRR |
+|---|---|---|---|---|
+| 0.42 | 1.2·10⁻⁴ | 2.75 % | 1.0·10⁻⁴ | 4.55 % |
+| **0.45 (new default)** | **≈ 5·10⁻⁵** | **≈ 4.0 %** | 2.8·10⁻⁵ | 6.8 % |
+| 0.50 | 1.2·10⁻⁵ | 7.5 % | 3.5·10⁻⁶ | 12.9 % |
+
+At equal false-accept rate the Intel model rejects roughly 17–35 % fewer genuine pairs. LFW pairs are years apart with free pose and lighting; FaceGate averages ≥ 3 frames against same-camera enrolment samples, so real-world rejection rates are far lower than these single-image figures.
+
+**Per-frame latency** (`benchmarks/latency.py`, 640×640 frame; both rows measured back to back on the same, heavily loaded CPU, so compare ratios, not absolute values):
+
+| | detect | PAD | embed | frame p50 |
+|---|---|---|---|---|
+| Previous: SFace + flip on ORT, detection at full resolution | 121.6 ms | 20.7 ms | 171.7 ms | 308.8 ms |
+| New: Intel 0095 on OpenVINO, detection at 320 px | 23.7 ms | 20.8 ms | 18.8 ms | **62.8 ms (≈ 4.9x faster)** |
+
+Other throughput changes: `INFERENCE_WORKERS=0` → one worker per physical core (8 instead of 4 here), `cv2.setNumThreads(1)` so workers don't oversubscribe the CPU, and a verification session stops embedding after `EMBED_MAX_FRAMES=6`.
+
+Tests: 21 / 22 pass with LFW photos as `tests/data` faces; the remaining failure is the e2e enrolment's liveness gate: LFW photos are photographs of photographs and score a passive-PAD median of ~0.42, below the 0.45 default (and the 0.80 in `.env.example`). With `PAD_LIVE_THRESHOLD=0.3` for the run, all e2e steps pass with the new model (enrol → duplicate guard → identified with score > 0.8 → single-use token → unknown face rejected). This is a property of the test images, not of the recognition change. **Pending:** the 300-client load test (§4) must be re-run on an idle host; the run on this machine was postponed because an unrelated process held the CPU at 100 %.

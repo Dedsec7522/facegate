@@ -12,7 +12,7 @@ from app.core.crypto import encrypt_embedding
 from app.db.models import BiometricEnrolment, Employee, EnrolmentStatus, FaceTemplate, new_id
 from app.services.index import rebuild_index
 from app.services.verification import Session
-from app.vision.embedder import MODEL_VERSION, normalize
+from app.vision.embedder import normalize
 from app.vision.pipeline import encode_jpeg, get_pipeline
 
 
@@ -64,7 +64,7 @@ async def commit_enrolment(db: AsyncSession, s: Session, *, employee: Employee, 
         liveness_score=live_avg,
         template_count=len(s.poses),
         thumbnail_jpeg=encode_jpeg(front[2], 70) if settings.keep_enrol_thumbnail else None,
-        model_version=MODEL_VERSION,
+        model_version=get_pipeline().embedder.version,
         notes=notes,
     )
     db.add(enrol)
@@ -84,8 +84,8 @@ async def add_adaptive_template(db: AsyncSession, employee_id: str, emb: np.ndar
     so the model follows gradual appearance changes (beard, glasses, hairstyle). Bounded per employee;
     the oldest adaptive template is dropped first. Never touches the admin-captured enrolment samples."""
     enrol = (await db.execute(select(BiometricEnrolment).where(BiometricEnrolment.employee_id == employee_id, BiometricEnrolment.status == EnrolmentStatus.active))).scalar_one_or_none()
-    if enrol is None:
-        return False
+    if enrol is None or enrol.model_version != get_pipeline().embedder.version:
+        return False  # never mix embeddings from two models in one enrolment
     existing = (await db.execute(select(FaceTemplate).where(FaceTemplate.enrolment_id == enrol.id).order_by(FaceTemplate.created_at))).scalars().all()
     from app.core.crypto import decrypt_embedding
 

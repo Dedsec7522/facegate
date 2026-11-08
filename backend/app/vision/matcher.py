@@ -21,19 +21,24 @@ class MatchResult:
 class TemplateIndex:
     """Holds decrypted, L2-normalised templates in RAM only. Rebuilt from the DB on demand."""
 
-    def __init__(self) -> None:
+    def __init__(self, dim: int | None = None) -> None:
         self._lock = threading.RLock()
-        self._matrix = np.zeros((0, 128), np.float32)
+        self.dim = dim  # None: taken from the first load
+        self._matrix = np.zeros((0, dim or 0), np.float32)
         self._owners: list[str] = []
         self.version = 0
 
     def load(self, rows: list[tuple[str, np.ndarray]]) -> None:
         with self._lock:
+            if self.dim is None and rows:
+                self.dim = len(rows[0][1])
+            # Templates from another embedding model (different length) can never be compared — leave them out.
+            rows = [(e, v) for e, v in rows if len(v) == self.dim]
             if rows:
                 self._matrix = np.stack([v for _, v in rows]).astype(np.float32)
                 self._owners = [e for e, _ in rows]
             else:
-                self._matrix = np.zeros((0, 128), np.float32)
+                self._matrix = np.zeros((0, self.dim or 0), np.float32)
                 self._owners = []
             self.version += 1
 

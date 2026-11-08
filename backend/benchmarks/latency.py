@@ -34,7 +34,7 @@ def main() -> None:
     rng = np.random.default_rng(0)
     for n_emp in (50, 300, 1000):
         idx = TemplateIndex()
-        vecs = rng.normal(size=(n_emp * 5, 128)).astype(np.float32)
+        vecs = rng.normal(size=(n_emp * 5, pipe.embedder.dim)).astype(np.float32)
         vecs /= np.linalg.norm(vecs, axis=1, keepdims=True)
         idx.load([(f"e{i // 5}", v) for i, v in enumerate(vecs)])
         probe = runs[0].embedding

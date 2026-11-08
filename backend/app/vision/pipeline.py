@@ -10,7 +10,6 @@ import cv2
 import numpy as np
 
 from app.core.config import settings
-from app.vision.align import align_face
 from app.vision.detector import Face, FaceDetector
 from app.vision.embedder import FaceEmbedder
 from app.vision.matcher import TemplateIndex
@@ -32,10 +31,13 @@ class FrameAnalysis:
 
 class VisionPipeline:
     def __init__(self) -> None:
+        # Parallelism comes from the worker pool (one frame per core), not from threading inside each op:
+        # OpenCV's own pool would oversubscribe the CPU when every worker runs a detection at once.
+        cv2.setNumThreads(1)
         self.detector = FaceDetector()
         self.embedder = FaceEmbedder()
         self.pad = PresentationAttackDetector()
-        self.index = TemplateIndex()
+        self.index = TemplateIndex(self.embedder.dim)
         self.executor = ThreadPoolExecutor(max_workers=settings.inference_workers, thread_name_prefix="vision")
         self._sem = asyncio.Semaphore(settings.inference_workers * 2)
 
@@ -62,7 +64,7 @@ class VisionPipeline:
         emb = aligned = None
         if want_embedding:
             t2 = time.perf_counter()
-            aligned = align_face(bgr, face.landmarks)
+            aligned = self.embedder.align(bgr, face.landmarks)
             emb = self.embedder.embed(aligned)
             t["embed"] = (time.perf_counter() - t2) * 1000
         return FrameAnalysis(faces, face, q, live, emb, aligned, t, "ok")

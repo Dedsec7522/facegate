@@ -7,7 +7,8 @@ All components below permit commercial, self-hosted use. No paid or cloud biomet
 | Model | Purpose | Source | Licence | File | SHA-256 |
 |---|---|---|---|---|---|
 | YuNet (2023mar) | Face detection + 5 landmarks | OpenCV Zoo `face_detection_yunet` | MIT | `face_detection_yunet_2023mar.onnx` | `8f2383e4…552fa4` |
-| SFace (2021dec) | 128-d face embedding | OpenCV Zoo `face_recognition_sface` | Apache-2.0 | `face_recognition_sface_2021dec.onnx` | `0ba9fbfa…c34e79` |
+| face-reidentification-retail-0095 (default) | 256-d face embedding | Intel Open Model Zoo (`models/intel`, FP32 IR) | Apache-2.0 | `face-reidentification-retail-0095.xml` / `.bin` (SHA-384 match the OMZ `model.yml`: `d5adadad…a8ca7a` / `953bb75f…30efda`) | `6cf60c34…80c3` / `21319b95…dd62` |
+| SFace (2021dec, fallback) | 128-d face embedding | OpenCV Zoo `face_recognition_sface` | Apache-2.0 | `face_recognition_sface_2021dec.onnx` | `0ba9fbfa…c34e79` |
 | MiniFASNet V1SE (scale 4.0) | Passive presentation-attack detection | minivision-ai `Silent-Face-Anti-Spoofing` | Apache-2.0 | `minifasnet_v1se_4.0_80x80.onnx` (exported from `4_0_0_80x80_MiniFASNetV1SE.pth`, SHA-256 `84ee1d37…c5f5990`) | generated |
 | MiniFASNet V2 (scale 2.7) | Passive presentation-attack detection | minivision-ai `Silent-Face-Anti-Spoofing` | Apache-2.0 | `minifasnet_v2_2.7_80x80.onnx` (exported from `2.7_80x80_MiniFASNetV2.pth`, SHA-256 `a5eb02e1…99bec0`) | generated |
 
@@ -29,6 +30,7 @@ Notes
 | pyotp, qrcode | MIT / BSD | zod, react-hook-form | MIT |
 | opencv-python(-headless) | Apache-2.0 (OpenCV) | date-fns | MIT |
 | onnxruntime | MIT | Inter font (`@fontsource-variable/inter`) | OFL-1.1 |
+| openvino | Apache-2.0 | | |
 | numpy, pillow | BSD / MIT-CMU | Vite | MIT |
 | openpyxl | MIT | PostgreSQL (server) | PostgreSQL Licence |
 | httpx, websockets | BSD-3 | Nginx | BSD-2 |

@@ -49,12 +49,19 @@ class FaceDetector:
         return det
 
     def detect(self, bgr: np.ndarray) -> list[Face]:
+        """Detect on a copy downscaled to `detect_max_side` (detection cost scales with pixels; faces worth
+        verifying are ≥ 80 px in the streamed frame, i.e. ≥ 40 px here, well inside YuNet's range), then map boxes
+        and landmarks back to full-resolution coordinates so alignment keeps every pixel of detail."""
         h, w = bgr.shape[:2]
-        _, out = self._det(w, h).detect(bgr)
+        s = min(1.0, settings.detect_max_side / max(h, w)) if settings.detect_max_side > 0 else 1.0
+        img = cv2.resize(bgr, (round(w * s), round(h * s)), interpolation=cv2.INTER_AREA) if s < 1.0 else bgr
+        _, out = self._det(img.shape[1], img.shape[0]).detect(img)
         if out is None:
             return []
         faces: list[Face] = []
         for row in out:
+            row = row.copy()
+            row[:14] /= s
             x, y, bw, bh = row[:4]
             lm = row[4:14].reshape(5, 2).astype(np.float32)
             faces.append(Face((int(x), int(y), int(bw), int(bh)), lm, float(row[14])))

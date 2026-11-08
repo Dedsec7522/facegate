@@ -157,7 +157,10 @@ class SessionManager:
     # ---- attendance --------------------------------------------------------------------------
     async def process_attendance_frame(self, s: Session, bgr: np.ndarray) -> dict:
         pipe = get_pipeline()
-        a: FrameAnalysis = await pipe.analyse_async(bgr, want_embedding=True, want_pad=True, max_yaw=60.0)
+        # Once the session holds enough frontal embeddings, later frames only need detection + PAD (for the
+        # liveness median, head-turn and motion checks) — this is the most expensive stage, so skip it.
+        want_emb = len(s.embeddings) < settings.embed_max_frames
+        a: FrameAnalysis = await pipe.analyse_async(bgr, want_embedding=want_emb, want_pad=True, max_yaw=60.0)
         s.frames += 1
         resp = self._frame_feedback(a, s)
         if a.state != "ok":
