@@ -32,7 +32,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 _DUMMY_HASH = "$argon2id$v=19$m=65536,t=3,p=2$c29tZXNhbHRzb21lc2FsdA$Zb0mN1qg1xO4dG1cQ7m0GZ2m7T8bK3m0y2Q4m8q9p1k"
 
 
-def _set_cookies(resp: Response, access: str, refresh: str | None) -> None:
+def set_auth_cookies(resp: Response, access: str, refresh: str | None = None) -> None:
     common = {"httponly": True, "secure": settings.cookie_secure, "samesite": "strict", "domain": settings.cookie_domain, "path": "/"}
     resp.set_cookie(ACCESS_COOKIE, access, max_age=settings.access_token_minutes * 60, **common)
     if refresh:
@@ -92,7 +92,7 @@ async def login(body: LoginIn, request: Request, response: Response, db: AsyncSe
                           user_agent=(request.headers.get("user-agent") or "")[:255], ip=client_ip(request)))
     await audit(db, "auth.login", actor=user, request=request)
     await db.commit()
-    _set_cookies(response, create_access_token(user.id, user.role.value, True), raw)
+    set_auth_cookies(response, create_access_token(user.id, user.role.value, True), raw)
     return await _user_out(db, user)
 
 
@@ -114,7 +114,7 @@ async def refresh(request: Request, response: Response, db: AsyncSession = Depen
     db.add(RefreshSession(user_id=user.id, token_hash=new_hash, expires_at=now + timedelta(days=settings.refresh_token_days),
                           user_agent=sess.user_agent, ip=client_ip(request)))
     await db.commit()
-    _set_cookies(response, create_access_token(user.id, user.role.value, True), new_raw)
+    set_auth_cookies(response, create_access_token(user.id, user.role.value, True), new_raw)
     return await _user_out(db, user)
 
 

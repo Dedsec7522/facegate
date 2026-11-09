@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { ArrowLeft, ArrowRight, CheckCircle2, KeyRound, LogIn, LogOut, RefreshCw, ScanFace, ShieldCheck, XCircle } from 'lucide-react'
 import { Logo } from '../../components/layout/Logo'
@@ -9,6 +9,7 @@ import { CameraStage, type StageMode } from '../../components/camera/CameraStage
 import { useCamera } from '../../components/camera/useCamera'
 import { useVerificationStream } from '../../components/camera/useVerificationStream'
 import { api, ApiError } from '../../lib/api'
+import { useAuth } from '../../lib/auth'
 import { fmtTime } from '../../lib/format'
 import { popVariants, spring } from '../../lib/motion'
 import type { AttendanceAction, AttendanceEvent, FrameFeedback } from '../../lib/types'
@@ -35,6 +36,8 @@ export default function Kiosk() {
   const cam = useCamera(cameraOn)
   const [clock, setClock] = useState(new Date())
   useEffect(() => { const t = setInterval(() => setClock(new Date()), 1000); return () => clearInterval(t) }, [])
+  const navigate = useNavigate()
+  const { refresh: refreshAuth } = useAuth()
 
   const onTerminal = useCallback((fb: FrameFeedback) => {
     setResult(fb)
@@ -51,17 +54,23 @@ export default function Kiosk() {
 
   const reset = useCallback(() => { streamStop(); setScreen('welcome'); setResult(null); setRecorded(null); setActionError(null) }, [streamStop])
 
-  // Auto-return to the welcome screen after a result so the kiosk is ready for the next person.
+  // After a recorded event: if the server signed the employee's own account in, hand over to their dashboard once the
+  // greeting has played; otherwise return to the welcome screen so the kiosk is ready for the next person.
+  const handoff = recorded?.portal_session ?? null
   useEffect(() => {
+    if (screen === 'recorded' && handoff) {
+      const t = setTimeout(() => { streamStop(); void refreshAuth().then(() => navigate(handoff.role === 'employee' ? '/portal' : '/admin', { replace: true })) }, 1800)
+      return () => clearTimeout(t)
+    }
     if (screen === 'recorded' || screen === 'failed') { const t = setTimeout(reset, screen === 'recorded' ? 8000 : 12000); return () => clearTimeout(t) }
     if (screen === 'identified') { const t = setTimeout(reset, 60000); return () => clearTimeout(t) }
-  }, [screen, reset])
+  }, [screen, handoff, reset, streamStop, refreshAuth, navigate])
 
   const record = async (action: AttendanceAction) => {
     if (!result?.token) return
     setBusyAction(action); setActionError(null)
     try {
-      const ev = await api.post<AttendanceEvent>('/attendance/events', { token: result.token, action, device_label: 'kiosk-web' })
+      const ev = await api.post<AttendanceEvent>('/attendance/events', { token: result.token, action, device_label: 'kiosk-web', open_portal: true })
       setRecorded(ev); setScreen('recorded')
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : 'Could not record attendance')
@@ -135,7 +144,18 @@ export default function Kiosk() {
                 <p className="mt-4 text-5xl font-semibold tabular">{fmtTime(recorded.occurred_at)}</p>
                 <TimesRow firstIn={recorded.action === 'check_in' ? recorded.occurred_at : result?.today?.first_in} lastOut={recorded.action === 'check_out' ? recorded.occurred_at : null} />
                 <p className="mt-3 text-sm text-ink-3">Recorded on the server · {recorded.method === 'face' ? 'verified by face' : `method: ${recorded.method}`}</p>
-                <Button variant="outline" className="mt-auto self-start border-line-2 bg-transparent text-ink" onClick={reset} leftIcon={<RefreshCw className="size-4" />}>Done</Button>
+                {recorded.portal_session ? (
+                  <div className="mt-auto pt-6" aria-live="polite">
+                    <p className="text-sm text-ink-2">Opening your dashboard…</p>
+                    <span className="mt-2 block h-1 w-full overflow-hidden rounded-full bg-surface-3"><motion.span className="block h-full rounded-full bg-accent-500" initial={{ width: '0%' }} animate={{ width: '100%' }} transition={{ duration: 1.8, ease: 'linear' }} /></span>
+                    <p className="mt-2 text-xs text-ink-3">Signed in by your face for {recorded.portal_session.expires_in_minutes} minutes — no password needed.</p>
+                  </div>
+                ) : (
+                  <div className="mt-auto flex flex-wrap items-center gap-3 pt-6">
+                    <Button variant="outline" className="border-line-2 bg-transparent text-ink" onClick={reset} leftIcon={<RefreshCw className="size-4" />}>Done</Button>
+                    <Link to="/login" className="text-sm text-ink-3 underline hover:text-ink">Sign in to see your dashboard</Link>
+                  </div>
+                )}
               </Panel>
             )}
 

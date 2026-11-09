@@ -120,3 +120,34 @@ async def test_purge_biometrics_removes_templates_and_index(admin_client: AsyncC
     assert (await admin_client.get(f"/api/v1/employees/{emp_id}/enrolments")).json() == []
     # revoke (soft) path still answers cleanly on an employee with nothing left
     assert (await admin_client.delete(f"/api/v1/employees/{emp_id}/biometrics")).json() == {"removed": 0, "purged": False}
+
+
+async def test_face_event_can_open_short_portal_session(client: AsyncClient, db):
+    """Kiosk check-in with open_portal signs the employee's own account in: access cookie only, no refresh session.
+    An employee without a qualifying account gets the event but no session."""
+    from sqlalchemy import select
+
+    from app.core.security import hash_password
+    from app.db.models import Department, Employee, Role, UserAccount
+
+    dep = (await db.execute(select(Department))).scalars().first()
+    e8 = Employee(employee_code="E8", first_name="Face", last_name="Login", email="face.login@test.local", department_id=dep.id)
+    e9 = Employee(employee_code="E9", first_name="No", last_name="Account", email="no.account@test.local", department_id=dep.id)
+    db.add_all([e8, e9])
+    await db.flush()
+    db.add(UserAccount(email=e8.email, password_hash=hash_password("Face-Login-1234"), role=Role.employee, employee_id=e8.id))
+    await db.commit()
+
+    assert "fg_access" not in client.cookies
+    r = await client.post("/api/v1/attendance/events", json={"token": create_verification_token("face-sess-1", e8.id, "face"), "action": "check_in", "open_portal": True, "device_label": "kiosk-web"})
+    assert r.status_code == 201, r.text
+    assert r.json()["portal_session"] == {"role": "employee", "expires_in_minutes": 15}
+    assert "fg_access" in client.cookies and "fg_refresh" not in client.cookies
+    me = await client.get("/api/v1/auth/me")
+    assert me.status_code == 200 and me.json()["role"] == "employee" and me.json()["employee_id"] == e8.id
+    assert (await client.post("/api/v1/auth/refresh")).status_code == 401  # nothing to extend: the session ends with the access cookie
+
+    client.cookies.clear()
+    r = await client.post("/api/v1/attendance/events", json={"token": create_verification_token("face-sess-3", e9.id, "face"), "action": "check_in", "open_portal": True})
+    assert r.status_code == 201, r.text
+    assert r.json()["portal_session"] is None and "fg_access" not in client.cookies

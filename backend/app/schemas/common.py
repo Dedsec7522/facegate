@@ -121,6 +121,12 @@ class AttendanceEventIn(BaseModel):
     token: str
     action: str  # check_in | check_out
     device_label: str | None = Field(default=None, max_length=80)
+    open_portal: bool = False  # also sign the employee's own account in (short, refresh-less session) so the kiosk can open their dashboard
+
+
+class PortalSessionOut(BaseModel):
+    role: str
+    expires_in_minutes: int
 
 
 class PinAttendanceIn(BaseModel):
@@ -143,6 +149,7 @@ class AttendanceEventOut(ORM):
     match_score: float | None
     liveness_score: float | None
     voided: bool
+    portal_session: PortalSessionOut | None = None  # set only when the request asked for one and the account qualifies
 
 
 class AttendanceDayOut(ORM):

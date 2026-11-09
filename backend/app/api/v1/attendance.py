@@ -9,9 +9,11 @@ from openpyxl import Workbook
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.auth import set_auth_cookies
+from app.core.config import settings
 from app.core.deps import get_current_user, require_staff
 from app.core.rate_limit import client_ip, limit, login_limiter
-from app.core.security import decode_token, verify_pin
+from app.core.security import create_access_token, decode_token, verify_pin
 from app.db.base import get_db
 from app.db.models import (
     AttendanceAction,
@@ -24,11 +26,12 @@ from app.db.models import (
     Department,
     Employee,
     EmployeeStatus,
+    Role,
     UserAccount,
     VerificationAttempt,
     VerificationOutcome,
 )
-from app.schemas.common import AttendanceDayOut, AttendanceEventIn, AttendanceEventOut, CorrectionIn, CorrectionOut, Page, PinAttendanceIn
+from app.schemas.common import AttendanceDayOut, AttendanceEventIn, AttendanceEventOut, CorrectionIn, CorrectionOut, Page, PinAttendanceIn, PortalSessionOut
 from app.services.attendance import AttendanceError, apply_correction, attendance_date_for, flag_missing_checkouts, next_expected_action, record_event
 from app.services.audit import audit
 from app.services.org_settings import get_org_settings
@@ -60,9 +63,25 @@ def _day_out(d: AttendanceDay, emp: Employee | None, dep: str | None) -> Attenda
                             late_minutes=d.late_minutes, early_leave_minutes=d.early_leave_minutes, status=d.status, is_open=d.is_open)
 
 
+async def _open_portal_session(db: AsyncSession, request: Request, response: Response, emp: Employee, device_label: str | None) -> PortalSessionOut | None:
+    """After a face-verified attendance event, sign the employee's *own* account in so the kiosk can open their dashboard.
+
+    The face check is a single factor, so this deliberately issues only the short access cookie (no refresh session:
+    the dashboard closes itself after `access_token_minutes`) and only for employee-role accounts without MFA — it never
+    opens the admin console and never bypasses MFA. Returns None when the employee has no qualifying account."""
+    user = (await db.execute(select(UserAccount).where(UserAccount.employee_id == emp.id))).scalar_one_or_none()
+    now = datetime.now(timezone.utc)
+    if not user or not user.is_active or user.role != Role.employee or user.mfa_enabled or (user.locked_until and user.locked_until > now):
+        return None
+    user.last_login_at = now
+    await audit(db, "auth.face_login", actor=user, target_type="employee", target_id=emp.id, detail={"device_label": device_label}, request=request)
+    set_auth_cookies(response, create_access_token(user.id, user.role.value, True))
+    return PortalSessionOut(role=user.role.value, expires_in_minutes=settings.access_token_minutes)
+
+
 # ---- kiosk ---------------------------------------------------------------------------------
 @router.post("/events", response_model=AttendanceEventOut, status_code=201)
-async def create_event(body: AttendanceEventIn, request: Request, db: AsyncSession = Depends(get_db)):
+async def create_event(body: AttendanceEventIn, request: Request, response: Response, db: AsyncSession = Depends(get_db)):
     payload = decode_token(body.token, "verify")
     if not payload:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Verification expired — please scan your face again")
@@ -83,9 +102,12 @@ async def create_event(body: AttendanceEventIn, request: Request, db: AsyncSessi
                                  liveness_score=att.liveness_score if att else None, ip=client_ip(request), device_label=body.device_label)
     except AttendanceError as e:
         raise HTTPException(status.HTTP_409_CONFLICT, {"code": e.code, "message": e.message})
+    portal = await _open_portal_session(db, request, response, emp, body.device_label) if body.open_portal else None
     await db.commit()
     dep = (await db.get(Department, emp.department_id)).name if emp.department_id else None
-    return _ev_out(res.event, emp, dep)
+    out = _ev_out(res.event, emp, dep)
+    out.portal_session = portal
+    return out
 
 
 @router.post("/events/pin", response_model=AttendanceEventOut, status_code=201, dependencies=[Depends(limit(login_limiter))])

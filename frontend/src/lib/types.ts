@@ -73,6 +73,8 @@ export interface AttendanceEvent {
   match_score: number | null
   liveness_score: number | null
   voided: boolean
+  /** Present when the kiosk asked to open the employee's dashboard and their own account was signed in (short, face-verified session). */
+  portal_session?: { role: Role; expires_in_minutes: number } | null
 }
 
 export type DayStatus = 'present' | 'late' | 'missing_checkout' | 'absent' | 'corrected'
