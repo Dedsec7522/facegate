@@ -103,7 +103,7 @@ All settings are environment variables (see `backend/.env.example`). Attendance 
 | `PAD_REJECT_MIN_FRAMES` | 14 | frames of evidence before a session is rejected as spoof |
 | `INFERENCE_DEVICE` | cpu | CPU only — no GPU is used or required |
 | `INFERENCE_WORKERS` | 0 | bounded CPU inference pool; `0` = one worker per physical core |
-| `DETECT_MAX_SIDE` | 320 | frames are downscaled to this for face detection only (alignment and embedding use full resolution); `0` disables |
+| `DETECT_MAX_SIDE` | 320 | two-stage detection: faces are found on a copy downscaled to this size, then landmarks are refined on a full-resolution crop around each face (coarse landmarks skew head pose and alignment); `0` = single full-resolution pass |
 | `EMBED_MAX_FRAMES` | 6 | a verification session stops computing embeddings once it holds this many frontal ones |
 | `KEEP_ENROL_THUMBNAIL` | true | keep one 112 px aligned thumbnail per enrolment for admins |
 | `VERIFY_SESSIONS_PER_MINUTE` | 120 | per-IP kiosk session limit |

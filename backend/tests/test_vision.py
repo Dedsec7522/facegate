@@ -7,6 +7,7 @@ import cv2
 import numpy as np
 import pytest
 
+from app.core.config import settings
 from app.vision.align import align_face
 from app.vision.matcher import TemplateIndex
 from app.vision.pipeline import VisionPipeline
@@ -70,18 +71,18 @@ def test_identification_rules(pipe, faces):
     idx.load([(f"emp{i}", a.embedding) for i, (_, a) in enumerate(items)])
     # every enrolled image identifies itself with a strong score
     for i, (_, a) in enumerate(items):
-        m = idx.match(a.embedding, accept=0.42, margin=0.08)
+        m = idx.match(a.embedding, accept=settings.match_accept_threshold, margin=0.08)
         assert m.decision == "identified" and m.employee_id == f"emp{i}" and m.score > 0.95
     # an un-enrolled identity is rejected
     idx2 = TemplateIndex()
     idx2.load([(f"emp{i}", a.embedding) for i, (_, a) in enumerate(items[1:])])
-    m = idx2.match(items[0][1].embedding, accept=0.42, margin=0.08)
+    m = idx2.match(items[0][1].embedding, accept=settings.match_accept_threshold, margin=0.08)
     assert m.decision == "unknown", m
     # ambiguity: two "employees" with near-identical templates → ambiguous, never a guess
     idx3 = TemplateIndex()
     e = items[0][1].embedding
     idx3.load([("a", e), ("b", e + np.random.default_rng(0).normal(0, 0.01, e.shape).astype(np.float32))])
-    assert idx3.match(e, accept=0.42, margin=0.08).decision == "ambiguous"
+    assert idx3.match(e, accept=settings.match_accept_threshold, margin=0.08).decision == "ambiguous"
     assert TemplateIndex().match(e).decision == "empty"
 
 

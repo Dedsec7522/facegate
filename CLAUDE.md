@@ -73,8 +73,9 @@ docs/01–07                  architecture, design system, security, test/benchm
   per comparison) with margin 0.08 (`identified | unknown | ambiguous`). Adaptive templates (max
   10/employee) are added after confident matches. An admin-saved threshold in the DB overrides the default.
 - **Throughput knobs**: `INFERENCE_WORKERS=0` → one worker per physical core; `cv2.setNumThreads(1)`
-  (parallelism comes from the pool); detection on a `DETECT_MAX_SIDE`=320 copy with landmarks mapped back
-  to full resolution; a session stops embedding after `EMBED_MAX_FRAMES`=6.
+  (parallelism comes from the pool); two-stage detection — faces found on a `DETECT_MAX_SIDE`=320 copy, then
+  landmarks re-detected on a full-resolution crop (coarse landmarks gave 4–11° yaw bias and worse alignment);
+  a session stops embedding after `EMBED_MAX_FRAMES`=6.
 - **Templates** are AES-256-GCM encrypted with `TEMPLATE_KEY` (AAD = template id). Rotating the
   key means re-enrolling everyone — by design.
 - **Portal insights** `GET /attendance/me/insights?days=30` averages check-in/out times in the

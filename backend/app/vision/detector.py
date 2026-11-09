@@ -48,22 +48,51 @@ class FaceDetector:
             self._local.size = (w, h)
         return det
 
-    def detect(self, bgr: np.ndarray) -> list[Face]:
-        """Detect on a copy downscaled to `detect_max_side` (detection cost scales with pixels; faces worth
-        verifying are ≥ 80 px in the streamed frame, i.e. ≥ 40 px here, well inside YuNet's range), then map boxes
-        and landmarks back to full-resolution coordinates so alignment keeps every pixel of detail."""
-        h, w = bgr.shape[:2]
-        s = min(1.0, settings.detect_max_side / max(h, w)) if settings.detect_max_side > 0 else 1.0
-        img = cv2.resize(bgr, (round(w * s), round(h * s)), interpolation=cv2.INTER_AREA) if s < 1.0 else bgr
+    def _run(self, img: np.ndarray) -> list[Face]:
         _, out = self._det(img.shape[1], img.shape[0]).detect(img)
         if out is None:
             return []
-        faces: list[Face] = []
-        for row in out:
-            row = row.copy()
-            row[:14] /= s
-            x, y, bw, bh = row[:4]
-            lm = row[4:14].reshape(5, 2).astype(np.float32)
-            faces.append(Face((int(x), int(y), int(bw), int(bh)), lm, float(row[14])))
+        return [Face((int(r[0]), int(r[1]), int(r[2]), int(r[3])), r[4:14].reshape(5, 2).astype(np.float32).copy(), float(r[14])) for r in out]
+
+    def detect(self, bgr: np.ndarray) -> list[Face]:
+        """Two-stage detection. Stage 1 finds faces on a copy downscaled to `detect_max_side` (cost scales with
+        pixels; faces worth verifying are ≥ 80 px in the stream, ≥ 40 px here, well inside YuNet's range).
+        Stage 2 re-runs the detector on a full-resolution crop around each face: landmarks straight from the
+        small image are coarse (measured 4–11° of head-yaw bias on 640 px frames), which would skew the pose gates
+        and the alignment the embedding depends on. The crop is a fraction of the frame, so this stays far cheaper
+        than detecting at full resolution while keeping full-resolution landmarks."""
+        h, w = bgr.shape[:2]
+        s = min(1.0, settings.detect_max_side / max(h, w)) if settings.detect_max_side > 0 else 1.0
+        if s >= 1.0:
+            faces = self._run(bgr)
+        else:
+            small = cv2.resize(bgr, (round(w * s), round(h * s)), interpolation=cv2.INTER_AREA)
+            faces = []
+            for f in self._run(small):
+                x, y, bw, bh = (v / s for v in f.box)
+                coarse = Face((int(x), int(y), int(bw), int(bh)), f.landmarks / s, f.score)
+                faces.append(self._refine(bgr, coarse) or coarse)
         faces.sort(key=lambda f: f.box[2] * f.box[3], reverse=True)
         return faces
+
+    def _refine(self, bgr: np.ndarray, f: Face) -> Face | None:
+        """Detect again inside a full-resolution crop (the coarse box padded by half its size on each side) and
+        return the detection nearest the coarse centre, in frame coordinates. None if nothing is found there."""
+        h, w = bgr.shape[:2]
+        x, y, bw, bh = f.box
+        px, py = bw // 2, bh // 2
+        x0, y0 = max(0, x - px), max(0, y - py)
+        x1, y1 = min(w, x + bw + px), min(h, y + bh + py)
+        if x1 - x0 < 32 or y1 - y0 < 32:
+            return None
+        cx, cy = f.center
+        best, best_d = None, float("inf")
+        for g in self._run(np.ascontiguousarray(bgr[y0:y1, x0:x1])):
+            gx, gy = g.center
+            d = (gx + x0 - cx) ** 2 + (gy + y0 - cy) ** 2
+            if d < best_d:
+                best, best_d = g, d
+        if best is None or best_d > (max(bw, bh) * 0.5) ** 2:
+            return None
+        bx, by, bbw, bbh = best.box
+        return Face((bx + x0, by + y0, bbw, bbh), best.landmarks + np.array([x0, y0], np.float32), best.score)
