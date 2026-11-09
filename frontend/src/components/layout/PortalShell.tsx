@@ -11,7 +11,7 @@ export function PortalShell() {
   return (
     <div className="min-h-dvh">
       <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-4xl items-center gap-3 px-4">
+        <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4">
           <Logo className="size-7" />
           <span className="font-semibold">FaceGate</span>
           <span className="rounded-full border border-line px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-ink-3">My attendance</span>
@@ -23,7 +23,7 @@ export function PortalShell() {
           </div>
         </div>
       </header>
-      <main id="main" tabIndex={-1} className="mx-auto max-w-4xl px-4 py-6 outline-none">
+      <main id="main" tabIndex={-1} className="mx-auto max-w-7xl px-4 py-6 outline-none">
         <Outlet />
       </main>
     </div>

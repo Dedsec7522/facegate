@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'motion/react'
-import { AlarmClockCheck, CalendarDays, CheckCircle2, Clock, ClockArrowDown, ClockArrowUp, LogIn, LogOut, ScanFace, ShieldCheck, TriangleAlert, UserX, XCircle } from 'lucide-react'
+import { AlarmClockCheck, CalendarCheck2, CalendarDays, CheckCircle2, Clock, ClockArrowDown, ClockArrowUp, Hourglass, LogIn, LogOut, ScanFace, ShieldCheck, Timer, TriangleAlert, UserX, XCircle } from 'lucide-react'
 import { api, ApiError } from '../../lib/api'
 import { fmtClock, fmtDate, fmtMinutes, fmtTime } from '../../lib/format'
 import { itemVariants, listVariants, spring } from '../../lib/motion'
@@ -82,14 +82,17 @@ export default function Portal() {
 
   return (
     <>
-      <PageHeader title={s ? `Hello, ${s.employee.name.split(' ')[0]}` : 'My attendance'} description={s ? `Working hours ${s.work_start}–${s.work_end} (${s.timezone})` : undefined} />
+      {!s && <PageHeader title="My attendance" />}
 
       {status.isLoading ? <Skeleton className="h-64" /> : status.isError ? (
         <Card><EmptyState title="Could not load your status" description={(status.error as Error).message} /></Card>
       ) : s && (
         <motion.div variants={listVariants} initial="hidden" animate="show" className="space-y-4">
+          {/* ---- Greeting + this-month summary band ---- */}
+          <SummaryBand name={s.employee.name} workStart={s.work_start} workEnd={s.work_end} timezone={s.timezone} days={summary} loading={days.isLoading} />
+
           {/* ---- Today's attendance + insights (mirrors the HR portal layout) ---- */}
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+          <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
             <motion.section variants={itemVariants} className="card flex flex-col overflow-hidden" aria-labelledby="today-h">
               <div className="flex items-center justify-between px-6 pt-5">
                 <h2 id="today-h" className="text-lg font-semibold">Today's Attendance</h2>
@@ -127,7 +130,7 @@ export default function Portal() {
                 <span className="text-xs text-ink-3">Last {insights.data?.window_days ?? 30} days</span>
               </div>
               {insights.isLoading ? (
-                <div className="mt-5 grid gap-4 sm:grid-cols-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-2xl" />)}</div>
+                <div className="mt-5 grid gap-4 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-2xl" />)}</div>
               ) : insights.isError ? (
                 <EmptyState title="Insights unavailable" description={(insights.error as Error).message} />
               ) : insights.data && <InsightTiles data={insights.data} />}
@@ -184,6 +187,43 @@ export default function Portal() {
 }
 
 
+/** Gradient greeting band with four quick figures for the current month (mirrors the HR dashboard header). */
+function SummaryBand({ name, workStart, workEnd, timezone, days, loading }: { name: string; workStart: string; workEnd: string; timezone: string; days: AttendanceDay[]; loading: boolean }) {
+  const present = days.filter((d) => d.status !== 'absent' && d.first_in)
+  const stats: { label: string; icon: ReactNode; value: ReactNode }[] = [
+    { label: 'Days present', icon: <CalendarCheck2 className="size-5" />, value: <CountUp value={present.length} /> },
+    { label: 'Hours this month', icon: <Hourglass className="size-5" />, value: fmtMinutes(present.reduce((a, d) => a + d.worked_minutes, 0)) },
+    { label: 'Late arrivals', icon: <Timer className="size-5" />, value: <CountUp value={present.filter((d) => d.late_minutes > 0).length} /> },
+    { label: 'Missed logouts', icon: <TriangleAlert className="size-5" />, value: <CountUp value={days.filter((d) => d.status === 'missing_checkout').length} /> },
+  ]
+  return (
+    <motion.section variants={itemVariants} aria-labelledby="hello-h"
+      className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-700 via-brand-600 to-accent-500 px-6 py-6 text-white shadow-pop">
+      <div aria-hidden className="pointer-events-none absolute -right-16 -top-24 size-72 rounded-full bg-white/10 blur-2xl" />
+      <div aria-hidden className="pointer-events-none absolute -bottom-28 left-1/3 size-72 rounded-full bg-accent-300/20 blur-3xl" />
+      <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-white/70">My attendance</p>
+          <h1 id="hello-h" className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Hello, {name.split(' ')[0]}</h1>
+          <p className="mt-1 text-sm text-white/80">Working hours {workStart}–{workEnd} · {timezone}</p>
+        </div>
+        <ul className="grid gap-3 grid-cols-2 sm:grid-cols-4 lg:min-w-[560px]">
+          {stats.map((st, i) => (
+            <motion.li key={st.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ ...spring.gentle, delay: 0.08 + 0.05 * i }}
+              className="flex flex-col items-start gap-2 rounded-xl bg-white/12 px-3.5 py-3 ring-1 ring-white/20 backdrop-blur-sm sm:flex-row sm:items-center sm:gap-3">
+              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-white/15 text-white" aria-hidden>{st.icon}</span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-medium uppercase leading-tight tracking-wide text-white/70">{st.label}</p>
+                <p className="tabular text-xl font-bold leading-tight">{loading ? '—' : st.value}</p>
+              </div>
+            </motion.li>
+          ))}
+        </ul>
+      </div>
+    </motion.section>
+  )
+}
+
 type InsightTone = 'purple' | 'sky' | 'indigo' | 'green' | 'red'
 const TILE_TONES: Record<InsightTone, { bg: string; icon: string; value: string; label: string }> = {
   purple: { bg: 'bg-brand-100/70 dark:bg-brand-800/30', icon: 'text-brand-700 dark:text-brand-200', value: 'text-brand-800 dark:text-brand-100', label: 'text-brand-700/80 dark:text-brand-200/80' },
@@ -218,7 +258,7 @@ function InsightTiles({ data }: { data: MyInsights }) {
   const avgM = data.avg_daily_minutes === null ? null : data.avg_daily_minutes % 60
   const n = data.days_present
   return (
-    <div className="mt-5 grid gap-3.5 sm:grid-cols-2">
+    <div className="mt-5 grid gap-3.5 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2">
       <InsightTile index={0} tone="purple" icon={<Clock className="size-6" />} label="Average Daily Hours" hint={`Across ${n} completed day${n === 1 ? '' : 's'}`}>
         {avgH === null ? '—' : <>{avgH}h {String(avgM).padStart(2, '0')}m</>}
       </InsightTile>
