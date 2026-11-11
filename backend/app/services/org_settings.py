@@ -21,6 +21,7 @@ class OrgSettings:
     late_grace_minutes: int
     duplicate_scan_seconds: int
     auto_close_after_hours: int
+    relogin_cooldown_hours: int  # minimum gap between a logout and the next login; 0 disables
     match_accept_threshold: float
     pad_live_threshold: float
     require_challenge: bool
@@ -43,6 +44,7 @@ def defaults() -> OrgSettings:
         late_grace_minutes=settings.late_grace_minutes,
         duplicate_scan_seconds=settings.duplicate_scan_seconds,
         auto_close_after_hours=settings.auto_close_after_hours,
+        relogin_cooldown_hours=settings.relogin_cooldown_hours,
         match_accept_threshold=settings.match_accept_threshold,
         pad_live_threshold=settings.pad_live_threshold,
         require_challenge=False,

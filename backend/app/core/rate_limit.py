@@ -34,7 +34,7 @@ class RateLimiter:
             self._hits.pop(key, None)
 
 
-login_limiter = RateLimiter(limit=10, window_seconds=60)
+login_limiter = RateLimiter(limit=settings.login_per_minute_per_ip, window_seconds=60)
 verify_session_limiter = RateLimiter(limit=settings.verify_sessions_per_minute, window_seconds=60)
 generic_limiter = RateLimiter(limit=300, window_seconds=60)
 

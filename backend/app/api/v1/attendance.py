@@ -315,7 +315,8 @@ async def my_status(db: AsyncSession = Depends(get_db), user: UserAccount = Depe
     day = (await db.execute(select(AttendanceDay).where(AttendanceDay.employee_id == user.employee_id, AttendanceDay.attendance_date == today))).scalar_one_or_none()
     emp = await db.get(Employee, user.employee_id)
     enrolled = (await db.execute(select(BiometricEnrolment.id).where(BiometricEnrolment.employee_id == emp.id, BiometricEnrolment.status == EnrolmentStatus.active))).first() is not None
-    return {"employee": {"id": emp.id, "name": emp.full_name, "code": emp.employee_code, "enrolled": enrolled}, "next": nxt, "today": _day_out(day, emp, None) if day else None,
+    return {"employee": {"id": emp.id, "name": emp.full_name, "code": emp.employee_code, "enrolled": enrolled, "since": emp.created_at.date().isoformat()},
+            "next": nxt, "today": _day_out(day, emp, None) if day else None,
             "work_start": org.work_start, "work_end": org.work_end, "timezone": org.timezone}
 
 

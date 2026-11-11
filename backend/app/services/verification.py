@@ -71,6 +71,8 @@ class Session:
     poses: dict[str, tuple[np.ndarray, float, np.ndarray]] = field(default_factory=dict)  # pose -> (emb, quality, aligned)
     pose_hold: dict[str, int] = field(default_factory=dict)
     consent_version: str | None = None
+    # Bystanders seen in this session: employee id -> (looked up at, {name, code, signed_in, since} or None).
+    others_cache: dict[str, tuple[float, dict | None]] = field(default_factory=dict)
 
     @property
     def age(self) -> float:
@@ -160,7 +162,8 @@ class SessionManager:
         # Once the session holds enough frontal embeddings, later frames only need detection + PAD (for the
         # liveness median, head-turn and motion checks) — this is the most expensive stage, so skip it.
         want_emb = len(s.embeddings) < settings.embed_max_frames
-        a: FrameAnalysis = await pipe.analyse_async(bgr, want_embedding=want_emb, want_pad=True, max_yaw=60.0)
+        # Bystanders are identified too (one cheap embedding each) so the kiosk can label who else is in view.
+        a: FrameAnalysis = await pipe.analyse_async(bgr, want_embedding=want_emb, want_pad=True, max_yaw=60.0, want_others=True)
         s.frames += 1
         resp = self._frame_feedback(a, s)
         if a.state != "ok":
@@ -316,7 +319,9 @@ class SessionManager:
         else:
             s.pose_hold[target] = 0
         live_avg = float(np.median(s.live_probs)) if s.live_probs else 0.0
-        resp["liveness"] = {"frames": len(s.live_probs), "score": round(live_avg, 3), "passed": len(s.live_probs) >= settings.pad_min_frames and live_avg >= s.pad_threshold}
+        # Supervised enrolment only has to clear the spoof floor; `low` tells the admin the score sits below the kiosk's passive threshold.
+        resp["liveness"] = {"frames": len(s.live_probs), "score": round(live_avg, 3), "passed": len(s.live_probs) >= settings.pad_min_frames and live_avg >= settings.pad_spoof_threshold,
+                            "low": live_avg < s.pad_threshold}
         resp["poses"]["required_done"] = all(p in s.poses for p in REQUIRED_POSES)
         resp["state"] = "complete" if len(s.poses) == len(ENROL_POSES) else "collecting"
         return resp
@@ -341,6 +346,7 @@ class SessionManager:
             "frame": s.frames,
             "face": {"box": box, "landmarks": lm, "score": round(face.score, 3)} if face else None,
             "faces": len(a.faces),
+            "others": a.others,  # everyone except the subject (largest face); the stream handler adds names/status
             "issues": issues,
             "guidance": guidance,
             "quality": round(a.quality.score, 2) if a.quality else None,

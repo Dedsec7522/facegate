@@ -170,7 +170,7 @@ class AttendanceDayOut(ORM):
 
 class CorrectionIn(BaseModel):
     employee_id: str
-    kind: str  # add | void | adjust
+    kind: str  # add | void | adjust | leave | clear_leave
     reason: str = Field(min_length=5, max_length=500)
     event_id: str | None = None
     action: str | None = None
@@ -198,6 +198,7 @@ class SettingsPatch(BaseModel):
     late_grace_minutes: int | None = Field(default=None, ge=0, le=180)
     duplicate_scan_seconds: int | None = Field(default=None, ge=0, le=3600)
     auto_close_after_hours: int | None = Field(default=None, ge=1, le=48)
+    relogin_cooldown_hours: int | None = Field(default=None, ge=0, le=48)
     match_accept_threshold: float | None = Field(default=None, ge=0.2, le=0.9)
     pad_live_threshold: float | None = Field(default=None, ge=0.3, le=0.99)
     require_challenge: bool | None = None

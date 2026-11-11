@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { api, ApiError } from './api'
+import { setDisplayTimeZone } from './format'
 import type { Role, User } from './types'
 
 interface AuthState {
@@ -28,6 +29,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => { void refresh() }, [refresh])
+  // The organisation's time zone drives every displayed time (never the device's); public, so the kiosk gets it too.
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/health').then((r) => r.json()).then((h: { timezone?: string }) => { if (!cancelled) setDisplayTimeZone(h.timezone) }).catch(() => undefined)
+    return () => { cancelled = true }
+  }, [])
 
   const login = useCallback(async (email: string, password: string, totp?: string) => {
     const u = await api.post<User>('/auth/login', { identifier: email, password, totp_code: totp || undefined })

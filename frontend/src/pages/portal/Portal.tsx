@@ -1,25 +1,27 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'motion/react'
-import { AlarmClockCheck, CalendarCheck2, CalendarDays, CheckCircle2, Clock, ClockArrowDown, ClockArrowUp, Hourglass, LogIn, LogOut, ScanFace, ShieldCheck, Timer, TriangleAlert, UserX, XCircle } from 'lucide-react'
+import { addMonths, endOfMonth, format, isSameMonth, startOfMonth } from 'date-fns'
+import { AlarmClockCheck, CalendarCheck2, CheckCircle2, ChevronLeft, ChevronRight, Clock, ClockArrowDown, ClockArrowUp, Hourglass, LogIn, LogOut, ScanFace, ShieldCheck, Timer, TriangleAlert, UserX, XCircle } from 'lucide-react'
 import { api, ApiError } from '../../lib/api'
-import { fmtClock, fmtDate, fmtMinutes, fmtTime } from '../../lib/format'
+import { fmtClock, fmtDate, fmtDateTime, fmtMinutes, fmtTime, nowZoned } from '../../lib/format'
 import { itemVariants, listVariants, spring } from '../../lib/motion'
-import type { AttendanceAction, AttendanceDay, AttendanceEvent, FrameFeedback, MyInsights, Page } from '../../lib/types'
-import { Badge, StatusBadge } from '../../components/ui/Badge'
+import type { AttendanceAction, AttendanceDay, AttendanceEvent, FrameFeedback, MyInsights, NextAction, Page } from '../../lib/types'
+import { Badge, dayStatusLabel } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Card, CardBody, CardHeader } from '../../components/ui/Card'
 import { Dialog } from '../../components/ui/Dialog'
 import { Avatar, CountUp, EmptyState, PageHeader, Skeleton } from '../../components/ui/Misc'
 import { CameraStage, type StageMode } from '../../components/camera/CameraStage'
+import { FrameAlerts } from '../../components/camera/FrameAlerts'
 import { useCamera } from '../../components/camera/useCamera'
 import { useVerificationStream } from '../../components/camera/useVerificationStream'
 import { cn } from '../../lib/cn'
 import { Welcome } from '../kiosk/Kiosk'
 
 interface MyStatus {
-  employee: { id: string; name: string; code: string; enrolled: boolean }
-  next: { next: AttendanceAction; last_event: { id: string; action: string; occurred_at: string; method: string } | null; attendance_date: string }
+  employee: { id: string; name: string; code: string; enrolled: boolean; since: string }
+  next: NextAction
   today: AttendanceDay | null
   work_start: string
   work_end: string
@@ -35,6 +37,12 @@ const REASON_TEXT: Record<string, string> = {
   inconsistent: 'The face changed during verification. Please try again with only you in view.',
 }
 
+/** Which days the "This month" list shows; set by tapping a figure in the greeting band. */
+type DayFilter = 'all' | 'present' | 'late' | 'missing'
+const FILTER_LABEL: Record<DayFilter, string> = { all: 'All days', present: 'Days present', late: 'Late arrivals', missing: 'Missed logouts' }
+const isPresent = (d: AttendanceDay) => d.status !== 'absent' && !!d.first_in
+const matchesFilter = (d: AttendanceDay, f: DayFilter) => f === 'all' ? true : f === 'present' ? isPresent(d) : f === 'late' ? isPresent(d) && d.late_minutes > 0 : d.status === 'missing_checkout'
+
 function useNow(enabled: boolean) {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
@@ -48,15 +56,21 @@ function useNow(enabled: boolean) {
 export default function Portal() {
   const qc = useQueryClient()
   const status = useQuery({ queryKey: ['me', 'status'], queryFn: () => api.get<MyStatus>('/attendance/me/status'), refetchInterval: 60_000, retry: false })
-  const monthStart = new Date()
-  monthStart.setDate(1)
-  const from = monthStart.toISOString().slice(0, 10)
-  const days = useQuery({ queryKey: ['me', 'days', from], queryFn: () => api.get<Page<AttendanceDay>>('/attendance/me/days', { date_from: from, page_size: 31 }), enabled: status.isSuccess })
+  const thisMonth = startOfMonth(nowZoned())
+  const from = ymd(thisMonth)
+  // Greeting band: always the current month. Calendar: the month being viewed (same query when they coincide).
+  const days = useQuery({ queryKey: ['me', 'days', from], queryFn: () => api.get<Page<AttendanceDay>>('/attendance/me/days', { date_from: from, date_to: ymd(endOfMonth(thisMonth)), page_size: 31 }), enabled: status.isSuccess })
+  const [viewMonth, setViewMonth] = useState(thisMonth)
+  const viewFrom = ymd(viewMonth)
+  const viewDays = useQuery({ queryKey: ['me', 'days', viewFrom], queryFn: () => api.get<Page<AttendanceDay>>('/attendance/me/days', { date_from: viewFrom, date_to: ymd(endOfMonth(viewMonth)), page_size: 31 }), enabled: status.isSuccess })
   const [selected, setSelected] = useState<string | null>(null)
   const events = useQuery({ queryKey: ['me', 'events', selected], queryFn: () => api.get<AttendanceEvent[]>('/attendance/me/events', { attendance_date: selected }), enabled: !!selected })
   const insights = useQuery({ queryKey: ['me', 'insights'], queryFn: () => api.get<MyInsights>('/attendance/me/insights', { days: 30 }), enabled: status.isSuccess })
   const [verifyOpen, setVerifyOpen] = useState(false)
   const [photoOk, setPhotoOk] = useState(true)
+  const [filter, setFilter] = useState<DayFilter>('all')
+  const monthRef = useRef<HTMLDivElement>(null)
+  const pickFilter = (f: DayFilter) => { setFilter(f); monthRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
 
   const s = status.data
   const isOpen = !!s?.today?.is_open
@@ -78,7 +92,10 @@ export default function Portal() {
   }
 
   const summary = days.data?.items ?? []
+  const viewed = viewDays.data?.items ?? []
+  const shown = viewed.filter((d) => matchesFilter(d, filter))
   const action: AttendanceAction = s?.next.next ?? 'check_in'
+  const blockedUntil = s?.next.next === 'check_in' ? s.next.login_allowed_at ?? null : null
 
   return (
     <>
@@ -89,7 +106,7 @@ export default function Portal() {
       ) : s && (
         <motion.div variants={listVariants} initial="hidden" animate="show" className="space-y-4">
           {/* ---- Greeting + this-month summary band ---- */}
-          <SummaryBand name={s.employee.name} workStart={s.work_start} workEnd={s.work_end} timezone={s.timezone} days={summary} loading={days.isLoading} />
+          <SummaryBand name={s.employee.name} workStart={s.work_start} workEnd={s.work_end} timezone={s.timezone} days={summary} loading={days.isLoading} active={filter} onPick={pickFilter} />
 
           {/* ---- Today's attendance + insights (mirrors the HR portal layout) ---- */}
           <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
@@ -108,12 +125,19 @@ export default function Portal() {
               </motion.div>
               <dl className="mx-6 mt-5 flex items-start justify-between gap-4 text-sm">
                 <div><dt className="text-xs text-ink-3">Check In Time</dt><dd className="tabular mt-1 text-lg font-bold text-brand-700 dark:text-brand-200">{fmtTime(s.today?.first_in)}</dd></div>
-                <div className="text-right"><dt className="text-xs text-ink-3">Check Out Time</dt><dd className="tabular mt-1 text-lg font-bold text-brand-700 dark:text-brand-200">{fmtTime(s.today?.last_out)}</dd></div>
+                {/* While a session is open the day's earlier check-out (if any) is history, not "your logout": show it only after logging out. */}
+                <div className="text-right"><dt className="text-xs text-ink-3">Check Out Time</dt><dd className={cn('tabular mt-1 text-lg font-bold', isOpen ? 'text-ink-3' : 'text-brand-700 dark:text-brand-200')}>{isOpen ? '—' : fmtTime(s.today?.last_out)}</dd></div>
               </dl>
               <div className="mx-6 mt-4 border-t border-line" />
               <div className="mx-6 mt-auto pt-4 pb-6">
                 <p className="mb-3 text-center text-xs text-ink-3">{isOpen ? 'Worked so far' : 'Worked today'} <span className="tabular font-semibold text-ink">{fmtMinutes(liveMinutes)}</span></p>
-                <Button size="xl" variant={action === 'check_in' ? 'primary' : 'accent'} className="w-full" onClick={() => setVerifyOpen(true)} disabled={!s.employee.enrolled}
+                {blockedUntil && (
+                  <p role="alert" className="mb-3 flex gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+                    <XCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
+                    <span><strong>Login not allowed yet.</strong> You logged out at {fmtTime(s.next.last_checkout_at)}; a new login is allowed {s.next.cooldown_hours} hours after a logout, from <strong className="tabular">{fmtDateTime(blockedUntil)}</strong>.</span>
+                  </p>
+                )}
+                <Button size="xl" variant={action === 'check_in' ? 'primary' : 'accent'} className="w-full" onClick={() => setVerifyOpen(true)} disabled={!s.employee.enrolled || !!blockedUntil}
                   leftIcon={action === 'check_in' ? <LogIn className="size-5" /> : <LogOut className="size-5" />}>
                   {action === 'check_in' ? 'Login from Office' : 'Logout from Office'}
                 </Button>
@@ -137,26 +161,19 @@ export default function Portal() {
             </motion.section>
           </div>
 
-          <motion.div variants={itemVariants}>
+          <motion.div variants={itemVariants} ref={monthRef} className="scroll-mt-4">
             <Card>
-              <CardHeader title="This month" description="Tap a day to see its events" />
-              <CardBody className="px-0">
-                {days.isLoading ? <div className="space-y-2 px-5">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10" />)}</div>
-                : summary.length === 0 ? <EmptyState icon={<CalendarDays className="size-5" />} title="No attendance recorded this month" />
-                : (
-                  <ul className="divide-y divide-line">
-                    {summary.map((d) => (
-                      <li key={d.id}>
-                        <button onClick={() => setSelected(d.attendance_date)} className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-surface-3">
-                          <span className="w-24 shrink-0 text-sm font-medium">{fmtDate(d.attendance_date)}</span>
-                          <span className="tabular hidden text-sm text-ink-2 sm:inline">{fmtTime(d.first_in)} – {fmtTime(d.last_out)}</span>
-                          <span className="tabular ml-auto text-sm">{fmtMinutes(d.worked_minutes)}</span>
-                          {d.late_minutes > 0 && <Badge tone="warning">+{d.late_minutes}m late</Badge>}
-                          <StatusBadge status={d.status} />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
+              <CardHeader title="Attendance calendar" description={filter === 'all' ? 'Green = present, red = absent, yellow = leave. Tap a coloured day to see its events.' : `Highlighting ${FILTER_LABEL[filter].toLowerCase()} · tap a figure above to change`} />
+              <CardBody>
+                {filter !== 'all' && (
+                  <div className="mb-3 flex items-center gap-2">
+                    <Badge tone="info">{FILTER_LABEL[filter]} · {shown.length}</Badge>
+                    <button onClick={() => setFilter('all')} className="text-xs text-ink-3 underline hover:text-ink">Show all days</button>
+                  </div>
+                )}
+                {viewDays.isLoading ? <Skeleton className="h-72" /> : (
+                  <MonthCalendar month={viewMonth} days={viewed} since={s.employee.since} filter={filter} canNext={!isSameMonth(viewMonth, thisMonth)}
+                    onPrev={() => setViewMonth((m) => addMonths(m, -1))} onNext={() => setViewMonth((m) => addMonths(m, 1))} onPick={setSelected} />
                 )}
               </CardBody>
             </Card>
@@ -187,14 +204,94 @@ export default function Portal() {
 }
 
 
+const ymd = (d: Date) => format(d, 'yyyy-MM-dd')
+
+type CellKind = 'present' | 'absent' | 'leave' | 'off' | 'future' | 'before'
+const CELL: Record<CellKind, string> = {
+  present: 'border-emerald-200 bg-emerald-100 text-emerald-900 hover:bg-emerald-200 dark:border-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-100 dark:hover:bg-emerald-900/60',
+  absent: 'border-red-200 bg-red-100 text-red-900 dark:border-red-800 dark:bg-red-900/40 dark:text-red-100',
+  leave: 'border-amber-200 bg-amber-100 text-amber-900 hover:bg-amber-200 dark:border-amber-800 dark:bg-amber-900/40 dark:text-amber-100 dark:hover:bg-amber-900/60',
+  off: 'border-line bg-surface-2 text-ink-3',
+  future: 'border-dashed border-line bg-surface text-ink-3',
+  before: 'border-line bg-surface text-ink-3',
+}
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+/**
+ * Month grid, Monday first. Green = present (any day with a check-in), red = absent (a weekday on or after the
+ * employee record's start with no attendance, or an admin-set absent row), yellow = leave (set by an administrator).
+ * Weekends, days before the record existed and upcoming days are neutral. Weekends are assumed non-working.
+ */
+function MonthCalendar({ month, days, since, filter, canNext, onPrev, onNext, onPick }: {
+  month: Date; days: AttendanceDay[]; since: string; filter: DayFilter; canNext: boolean; onPrev: () => void; onNext: () => void; onPick: (date: string) => void
+}) {
+  const byDate = new Map(days.map((d) => [d.attendance_date, d]))
+  const today = ymd(nowZoned())
+  const first = startOfMonth(month)
+  const lead = (first.getDay() + 6) % 7
+  const cells: Array<Date | null> = [...Array.from({ length: lead }, () => null), ...Array.from({ length: endOfMonth(month).getDate() }, (_, i) => new Date(month.getFullYear(), month.getMonth(), i + 1))]
+  while (cells.length % 7) cells.push(null)
+  const kindOf = (d: Date): { kind: CellKind; row?: AttendanceDay } => {
+    const key = ymd(d)
+    const row = byDate.get(key)
+    if (row) return { kind: row.status === 'leave' ? 'leave' : isPresent(row) ? 'present' : 'absent', row }
+    if (key >= today) return { kind: 'future' }  // today is not absent until it is over
+    if (d.getDay() === 0 || d.getDay() === 6) return { kind: 'off' }
+    if (since && key < since) return { kind: 'before' }
+    return { kind: 'absent' }
+  }
+  const counts = { present: 0, absent: 0, leave: 0 }
+  for (const d of cells) if (d) { const k = kindOf(d).kind; if (k === 'present' || k === 'absent' || k === 'leave') counts[k] += 1 }
+  return (
+    <div>
+      <div className="flex items-center justify-between">
+        <Button variant="ghost" size="sm" onClick={onPrev} leftIcon={<ChevronLeft className="size-4" />} aria-label="Previous month">Prev</Button>
+        <p className="text-sm font-semibold">{format(month, 'MMMM yyyy')}</p>
+        <Button variant="ghost" size="sm" onClick={onNext} disabled={!canNext} rightIcon={<ChevronRight className="size-4" />} aria-label="Next month">Next</Button>
+      </div>
+      <div className="mt-3 grid grid-cols-7 gap-1.5 text-center text-[11px] font-medium uppercase tracking-wide text-ink-3">{WEEKDAYS.map((w) => <span key={w}>{w}</span>)}</div>
+      <div className="mt-1.5 grid grid-cols-7 gap-1.5">
+        {cells.map((d, i) => {
+          if (!d) return <div key={`pad-${i}`} aria-hidden />
+          const { kind, row } = kindOf(d)
+          const key = ymd(d)
+          const dim = filter !== 'all' && !(row && matchesFilter(row, filter))
+          const title = row
+            ? `${fmtDate(key, 'EEE d MMM')}: ${dayStatusLabel[row.status]}${isPresent(row) ? ` · ${fmtTime(row.first_in)} – ${fmtTime(row.last_out)} · ${fmtMinutes(row.worked_minutes)}` : ''}${row.late_minutes > 0 ? ` · ${row.late_minutes}m late` : ''}`
+            : `${fmtDate(key, 'EEE d MMM')}: ${kind === 'absent' ? 'Absent (no attendance recorded)' : kind === 'off' ? 'Weekend' : kind === 'future' ? (key === today ? 'Today: no attendance recorded yet' : 'Upcoming') : 'Before your record started'}`
+          return (
+            <button key={key} type="button" disabled={!row} onClick={() => row && onPick(key)} title={title} aria-label={title}
+              className={cn('relative flex aspect-square flex-col items-center justify-center rounded-lg border text-sm font-medium transition-opacity sm:aspect-[4/3]',
+                CELL[kind], !row && 'cursor-default', dim && 'opacity-30', key === today && 'ring-2 ring-brand-500 ring-offset-1 ring-offset-surface')}>
+              <span className="tabular">{d.getDate()}</span>
+              {row && isPresent(row) && <span className="tabular hidden text-[10px] font-normal opacity-80 sm:block">{fmtMinutes(row.worked_minutes)}</span>}
+              {row && row.late_minutes > 0 && <span className="absolute right-1 top-1 size-1.5 rounded-full bg-amber-500" aria-hidden />}
+              {row && row.status === 'missing_checkout' && <span className="absolute left-1 top-1 size-1.5 rounded-full bg-red-500" aria-hidden />}
+            </button>
+          )
+        })}
+      </div>
+      <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-ink-2">
+        <li className="flex items-center gap-1.5"><span className="size-3 rounded border border-emerald-200 bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-900/40" /> Present · {counts.present}</li>
+        <li className="flex items-center gap-1.5"><span className="size-3 rounded border border-red-200 bg-red-100 dark:border-red-800 dark:bg-red-900/40" /> Absent · {counts.absent}</li>
+        <li className="flex items-center gap-1.5"><span className="size-3 rounded border border-amber-200 bg-amber-100 dark:border-amber-800 dark:bg-amber-900/40" /> Leave · {counts.leave}</li>
+        <li className="flex items-center gap-1.5"><span className="size-3 rounded border border-line bg-surface-2" /> Weekend</li>
+        <li className="flex items-center gap-1.5"><span className="size-1.5 rounded-full bg-amber-500" /> Late arrival</li>
+        <li className="flex items-center gap-1.5"><span className="size-1.5 rounded-full bg-red-500" /> Missed logout</li>
+      </ul>
+      <p className="mt-2 text-xs text-ink-3">Absent means a past weekday on or after {fmtDate(since, 'd MMM yyyy')} with no attendance recorded. Leave is marked by an administrator. Weekends are shown as non-working days.</p>
+    </div>
+  )
+}
+
 /** Gradient greeting band with four quick figures for the current month (mirrors the HR dashboard header). */
-function SummaryBand({ name, workStart, workEnd, timezone, days, loading }: { name: string; workStart: string; workEnd: string; timezone: string; days: AttendanceDay[]; loading: boolean }) {
-  const present = days.filter((d) => d.status !== 'absent' && d.first_in)
-  const stats: { label: string; icon: ReactNode; value: ReactNode }[] = [
-    { label: 'Days present', icon: <CalendarCheck2 className="size-5" />, value: <CountUp value={present.length} /> },
-    { label: 'Hours this month', icon: <Hourglass className="size-5" />, value: fmtMinutes(present.reduce((a, d) => a + d.worked_minutes, 0)) },
-    { label: 'Late arrivals', icon: <Timer className="size-5" />, value: <CountUp value={present.filter((d) => d.late_minutes > 0).length} /> },
-    { label: 'Missed logouts', icon: <TriangleAlert className="size-5" />, value: <CountUp value={days.filter((d) => d.status === 'missing_checkout').length} /> },
+function SummaryBand({ name, workStart, workEnd, timezone, days, loading, active, onPick }: { name: string; workStart: string; workEnd: string; timezone: string; days: AttendanceDay[]; loading: boolean; active: DayFilter; onPick: (f: DayFilter) => void }) {
+  const present = days.filter(isPresent)
+  const stats: { label: string; icon: ReactNode; value: ReactNode; filter: DayFilter }[] = [
+    { label: 'Days present', icon: <CalendarCheck2 className="size-5" />, value: <CountUp value={present.length} />, filter: 'present' },
+    { label: 'Hours this month', icon: <Hourglass className="size-5" />, value: fmtMinutes(present.reduce((a, d) => a + d.worked_minutes, 0)), filter: 'present' },
+    { label: 'Late arrivals', icon: <Timer className="size-5" />, value: <CountUp value={present.filter((d) => d.late_minutes > 0).length} />, filter: 'late' },
+    { label: 'Missed logouts', icon: <TriangleAlert className="size-5" />, value: <CountUp value={days.filter((d) => d.status === 'missing_checkout').length} />, filter: 'missing' },
   ]
   return (
     <motion.section variants={itemVariants} aria-labelledby="hello-h"
@@ -209,13 +306,18 @@ function SummaryBand({ name, workStart, workEnd, timezone, days, loading }: { na
         </div>
         <ul className="grid gap-3 grid-cols-2 sm:grid-cols-4 lg:min-w-[560px]">
           {stats.map((st, i) => (
-            <motion.li key={st.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ ...spring.gentle, delay: 0.08 + 0.05 * i }}
-              className="flex flex-col items-start gap-2 rounded-xl bg-white/12 px-3.5 py-3 ring-1 ring-white/20 backdrop-blur-sm sm:flex-row sm:items-center sm:gap-3">
-              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-white/15 text-white" aria-hidden>{st.icon}</span>
-              <div className="min-w-0">
-                <p className="text-[11px] font-medium uppercase leading-tight tracking-wide text-white/70">{st.label}</p>
-                <p className="tabular text-xl font-bold leading-tight">{loading ? '—' : st.value}</p>
-              </div>
+            <motion.li key={st.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ ...spring.gentle, delay: 0.08 + 0.05 * i }}>
+              <motion.button type="button" onClick={() => onPick(st.filter)} aria-pressed={active === st.filter} title={`Show ${st.label.toLowerCase()} in the month list`}
+                whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }}
+                className={cn('flex w-full flex-col items-start gap-2 rounded-xl px-3.5 py-3 text-left ring-1 backdrop-blur-sm transition-colors sm:flex-row sm:items-center sm:gap-3',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white',
+                  active === st.filter ? 'bg-white/25 ring-white/60' : 'bg-white/12 ring-white/20 hover:bg-white/20')}>
+                <span className="grid size-9 shrink-0 place-items-center rounded-full bg-white/15 text-white" aria-hidden>{st.icon}</span>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-medium uppercase leading-tight tracking-wide text-white/70">{st.label}</p>
+                  <p className="tabular text-xl font-bold leading-tight">{loading ? '—' : st.value}</p>
+                </div>
+              </motion.button>
             </motion.li>
           ))}
         </ul>
@@ -224,30 +326,22 @@ function SummaryBand({ name, workStart, workEnd, timezone, days, loading }: { na
   )
 }
 
-type InsightTone = 'purple' | 'sky' | 'indigo' | 'green' | 'red'
-const TILE_TONES: Record<InsightTone, { bg: string; icon: string; value: string; label: string }> = {
-  purple: { bg: 'bg-brand-100/70 dark:bg-brand-800/30', icon: 'text-brand-700 dark:text-brand-200', value: 'text-brand-800 dark:text-brand-100', label: 'text-brand-700/80 dark:text-brand-200/80' },
-  sky: { bg: 'bg-sky-100/70 dark:bg-sky-900/30', icon: 'text-sky-600 dark:text-sky-300', value: 'text-sky-600 dark:text-sky-200', label: 'text-sky-700/80 dark:text-sky-200/80' },
-  indigo: { bg: 'bg-indigo-100/70 dark:bg-indigo-900/30', icon: 'text-indigo-600 dark:text-indigo-300', value: 'text-indigo-600 dark:text-indigo-200', label: 'text-indigo-700/80 dark:text-indigo-200/80' },
-  green: { bg: 'bg-emerald-100/70 dark:bg-emerald-900/30', icon: 'text-emerald-700 dark:text-emerald-300', value: 'text-emerald-700 dark:text-emerald-200', label: 'text-emerald-800/80 dark:text-emerald-200/80' },
-  red: { bg: 'bg-red-100/70 dark:bg-red-900/30', icon: 'text-red-600 dark:text-red-300', value: 'text-red-600 dark:text-red-200', label: 'text-red-700/80 dark:text-red-200/80' },
-}
-
-function InsightTile({ tone, icon, label, children, hint, index }: { tone: InsightTone; icon: ReactNode; label: string; children: ReactNode; hint?: string; index: number }) {
-  const t = TILE_TONES[tone]
+/** Insight tile in the site's own palette: brand-tinted surface, white icon disc with the brand icon, ink label.
+ * `alert` turns the value red (only used for black points when there are any). */
+function InsightTile({ icon, label, children, hint, index, alert = false }: { icon: ReactNode; label: string; children: ReactNode; hint?: string; index: number; alert?: boolean }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 14, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ ...spring.gentle, delay: 0.05 * index }}
       whileHover={{ y: -3 }} title={hint}
-      className={cn('flex items-center gap-3.5 rounded-2xl p-4 shadow-[0_1px_0_rgba(109,40,217,0.04)]', t.bg)}
+      className="flex items-center gap-3.5 rounded-2xl border border-brand-100 bg-brand-50/80 p-4 transition-colors hover:border-brand-200 dark:border-brand-800/60 dark:bg-brand-800/25 dark:hover:border-brand-700"
     >
       <motion.span initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ ...spring.snappy, delay: 0.05 * index + 0.12 }}
-        className={cn('grid size-12 shrink-0 place-items-center rounded-full bg-white shadow-sm dark:bg-surface', t.icon)} aria-hidden>
+        className="grid size-12 shrink-0 place-items-center rounded-full bg-white text-brand-700 shadow-sm dark:bg-surface dark:text-brand-200" aria-hidden>
         {icon}
       </motion.span>
       <div className="min-w-0">
-        <p className={cn('text-[13px] font-medium leading-snug', t.label)}>{label}</p>
-        <p className={cn('mt-0.5 text-2xl font-bold leading-tight tracking-tight', t.value)}>{children}</p>
+        <p className="text-[13px] font-medium leading-snug text-ink-3">{label}</p>
+        <p className={cn('mt-0.5 text-2xl font-bold leading-tight tracking-tight', alert ? 'text-red-600 dark:text-red-300' : 'text-brand-800 dark:text-brand-100')}>{children}</p>
       </div>
     </motion.div>
   )
@@ -259,19 +353,19 @@ function InsightTiles({ data }: { data: MyInsights }) {
   const n = data.days_present
   return (
     <div className="mt-5 grid gap-3.5 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2">
-      <InsightTile index={0} tone="purple" icon={<Clock className="size-6" />} label="Average Daily Hours" hint={`Across ${n} completed day${n === 1 ? '' : 's'}`}>
+      <InsightTile index={0} icon={<Clock className="size-6" />} label="Average Daily Hours" hint={`Across ${n} completed day${n === 1 ? '' : 's'}`}>
         {avgH === null ? '—' : <>{avgH}h {String(avgM).padStart(2, '0')}m</>}
       </InsightTile>
-      <InsightTile index={1} tone="sky" icon={<ClockArrowUp className="size-6" />} label="Average Check-In Time" hint={`Local time (${data.timezone})`}>
+      <InsightTile index={1} icon={<ClockArrowUp className="size-6" />} label="Average Check-In Time" hint={`Local time (${data.timezone})`}>
         {fmtClock(data.avg_check_in_minutes)}
       </InsightTile>
-      <InsightTile index={2} tone="indigo" icon={<ClockArrowDown className="size-6" />} label="Average Check-Out Time" hint={`Local time (${data.timezone})`}>
+      <InsightTile index={2} icon={<ClockArrowDown className="size-6" />} label="Average Check-Out Time" hint={`Local time (${data.timezone})`}>
         {fmtClock(data.avg_check_out_minutes)}
       </InsightTile>
-      <InsightTile index={3} tone="green" icon={<AlarmClockCheck className="size-6" />} label="On-Time Arrival Rate" hint={`${n - data.late_days} of ${n} days on time`}>
+      <InsightTile index={3} icon={<AlarmClockCheck className="size-6" />} label="On-Time Arrival Rate" hint={`${n - data.late_days} of ${n} days on time`}>
         {data.on_time_rate === null ? '—' : <CountUp value={Math.round(data.on_time_rate * 100)} suffix="%" />}
       </InsightTile>
-      <InsightTile index={4} tone="red" icon={<TriangleAlert className="size-6" />} label="Black Points" hint={`${data.late_days} late arrival${data.late_days === 1 ? '' : 's'} + ${data.missing_checkouts} missed logout${data.missing_checkouts === 1 ? '' : 's'}`}>
+      <InsightTile index={4} alert={data.black_points > 0} icon={<TriangleAlert className="size-6" />} label="Black Points" hint={`${data.late_days} late arrival${data.late_days === 1 ? '' : 's'} + ${data.missing_checkouts} missed logout${data.missing_checkouts === 1 ? '' : 's'}`}>
         <CountUp value={data.black_points} />
       </InsightTile>
     </div>
@@ -341,6 +435,7 @@ function VerifyDialog({ open, action, employeeName, onClose, onRecorded }: { ope
                     </li>
                   ))}
                 </ul>
+                <FrameAlerts fb={phase === 'verify' ? fb : null} subject="your own face" className="mt-4" />
               </motion.div>
             )}
             {phase === 'done' && recorded && (

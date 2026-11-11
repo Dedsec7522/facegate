@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     verify_session_ttl_seconds: int = 60  # fail fast with a clear reason instead of a long silent wait
     login_max_attempts: int = 5
     login_lockout_minutes: int = 15
+    login_per_minute_per_ip: int = 60  # shared office NAT: many people, one address; accounts still lock after 5 failures
 
     # Vision
     models_dir: Path = BACKEND_DIR / "models"
@@ -54,6 +55,10 @@ class Settings(BaseSettings):
     embed_min_frames: int = 3
     motion_min_frames: int = 5  # frames of landmark history needed before the frozen-stream check can pass
     min_face_size: int = 80  # px in the streamed frame; ~1 m from a laptop webcam
+    # The subject is the largest face. A second face at least this fraction of its size is "equally close" and the
+    # frame is refused (multiple_faces) until the person checking in steps closer; smaller faces are bystanders.
+    primary_face_margin: float = 0.85
+    max_other_faces: int = 3  # bystanders identified per frame (each costs one embedding, ~10 ms)
     max_stream_fps: float = 15.0  # server cap sits above the 10 fps clients send
     verify_sessions_per_minute: int = 120  # per client IP; raise behind a shared office NAT
     keep_enrol_thumbnail: bool = True
@@ -66,6 +71,7 @@ class Settings(BaseSettings):
     late_grace_minutes: int = 10
     duplicate_scan_seconds: int = 120
     auto_close_after_hours: int = 16
+    relogin_cooldown_hours: int = 10  # a new login is refused until this many hours after the last logout; 0 disables
 
     @field_validator("inference_workers")
     @classmethod

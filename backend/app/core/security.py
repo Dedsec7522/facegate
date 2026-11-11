@@ -13,12 +13,23 @@ from jose import JWTError, jwt
 
 from app.core.config import settings
 
-_ph = PasswordHasher(time_cost=3, memory_cost=64 * 1024, parallelism=2)
+# OWASP's recommended Argon2id cost: 19 MiB, 2 passes, 1 lane. The earlier 64 MiB / 3-pass setting was memory-bandwidth
+# bound and verified only ~13 passwords/s on an 8-thread laptop (vs ~70/s here), which turned a morning sign-in rush into
+# a queue. Hashes made with the old parameters still verify and are re-hashed on the next successful login.
+_ph = PasswordHasher(time_cost=2, memory_cost=19 * 1024, parallelism=1)
 ALGO = "HS256"
 
 
 def hash_password(password: str) -> str:
     return _ph.hash(password)
+
+
+def needs_rehash(hashed: str) -> bool:
+    """True when `hashed` was made with different Argon2 parameters than the current ones."""
+    try:
+        return _ph.check_needs_rehash(hashed)
+    except Exception:  # noqa: BLE001 - malformed/legacy hash: leave it alone, verification already decided
+        return False
 
 
 def verify_password(password: str, hashed: str) -> bool:

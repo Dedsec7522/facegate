@@ -24,7 +24,9 @@ work on the code without re-discovering it.
   employee; a different face returns `mismatch`. Nobody can log another person's account in/out.
 - **One common sign-in** for everyone; role (`admin | hr | employee`) decides the landing page.
   Login accepts username *or* email (`identifier`). Default dev admin: `admin` / `Welcome123`.
-  Employee usernames = lower-cased employee code (e.g. `tka001`).
+  Employee usernames = lower-cased employee code (e.g. `tka001`). `tools/seed.py --employee-logins` gives every
+  employee a portal login (password `Welcome123`); the sign-in page has Administrator / Employee tabs (`/login?as=employee`)
+  and, only when `/api/health` reports `development`, one-click test accounts.
 - **Enrolled faces persist** (encrypted templates in Postgres, in-RAM index rebuilt on start).
 - Light-purple design (brand `#6D28D9`), light mode default, smooth Motion animations.
 
@@ -82,10 +84,37 @@ docs/01–07                  architecture, design system, security, test/benchm
   active `employee`-role account without MFA, the server also sets the access cookie only (no refresh session, so it ends after
   `ACCESS_TOKEN_MINUTES`), audits `auth.face_login`, returns `portal_session`, and the kiosk navigates to `/portal` after the
   greeting. Never opens the admin console and never bypasses MFA.
+- **Several people in frame**: the subject is the largest face (closest to the camera); everyone else comes back in
+  `others` with box + identity (one embedding each, no PAD) and, on the attendance stream, name / `signed_in` / `since`
+  from a per-session cache (`_enrich_others`). Only a second face within `PRIMARY_FACE_MARGIN` (0.85) of the subject's
+  size refuses the frame (`multiple_faces`: "step closer"). Bystanders are never checked in.
+- **Partial covering** is a colour heuristic, not a trained model (`quality.occlusion`): nose + lip patches not
+  skin-toned while a forehead/bridge/temple patch is → `covered`; both eye patches far darker than it → `eyes_covered`;
+  silent when no reference patch is skin-toned. `FrameAlerts` renders it as an error in kiosk, portal and enrolment.
+- **Time zone**: the organisation zone (Settings → Attendance rules, a country/region picker in `RegionPicker.tsx`
+  over the offline table `lib/regions.ts`; no IP geolocation) is served publicly by `/api/health` and set into
+  `lib/format.ts` (`setDisplayTimeZone`) at start-up, so every displayed time is organisation wall-clock, never the
+  device's. Server timestamps are UTC. Changing zone/work hours recomputes the last 31 days (`recompute_recent_days`).
+- **Re-login cooldown** (`relogin_cooldown_hours`, default 10, 0 disables; Settings → Attendance rules): after a
+  check-out the next check-in is refused (`AttendanceError("cooldown")`, HTTP 409) until the gap has passed. It counts
+  from the latest non-voided check-out on any day, so same-day re-entry (lunch break) is impossible unless it is 0.
+  `next_expected_action` returns `login_allowed_at` / `last_checkout_at` / `cooldown_hours` so kiosk and portal show the
+  block instead of offering a login.
+- **Leave** is a day status set only by an admin correction (`kind: leave | clear_leave`, `occurred_at` = any time on
+  the day, refused when the day has events); `recompute_day` preserves it. Absent days have no row (or an `absent`
+  row): the portal calendar derives them client-side for Mon–Fri on or after the employee record's `since` date.
 - **Portal insights** `GET /attendance/me/insights?days=30` averages check-in/out times in the
   org timezone; "black points" = late arrivals + missed logouts.
 
 ## Working on it
+
+Fresh machine: README §1 lists every prerequisite with the winget / brew command (Git, Python 3.12, Node LTS, Docker
+Desktop running, VC++ redistributable on Windows). Sequence: Postgres container `facegate-pg` → `backend/.venv` +
+`pip install -r requirements.txt` → `.env` from `.env.example` with generated `SECRET_KEY` / `TEMPLATE_KEY` →
+`alembic upgrade head` → `tools/seed.py --demo --employee-logins` → API on 8000 → `npm install && npm run dev` (5173).
+On Windows, winget installs are not on an already-open shell's PATH: use `%LOCALAPPDATA%\Programs\Git\cmd\git.exe`,
+`%LOCALAPPDATA%\Programs\Python\Python312\python.exe`, `C:\Program Files\nodejs` (or open a new terminal).
+Test accounts: `admin` / `Welcome123`; employees = lower-cased employee code / `Welcome123`.
 
 ```bash
 # backend (Python 3.12+; a .venv already exists on the dev machine)
@@ -108,12 +137,24 @@ npm run build
 ## Gotchas learned the hard way
 
 - `onnxruntime` and `openvino` on Windows need the VC++ redistributable.
+- `.env.example` once shipped `PAD_LIVE_THRESHOLD=0.80`, far above what a real webcam scores (0.4–0.85; glasses, caps
+  and dim offices sit at the low end) — keep it at the 0.45 default. Enrolment is admin-supervised, so `commit_enrolment`
+  rejects only a clear spoof (median < `PAD_SPOOF_THRESHOLD`) and flags low-but-live medians (`liveness_low`) instead of blocking.
 - The OpenCV Zoo **int8** SFace files are ~7x *slower* than fp32 on ONNX Runtime (ConvInteger) and the
   `int8bq` file doesn't load in ORT at all. The old opset-8 ArcFace R100 ONNX fails ORT's BatchNorm check
   (OpenVINO reads it) and costs ~360 ms/face — too slow.
 - Vision/e2e tests skip without `tests/data/synth_face_*.jpg` (git-ignored). Real photos used there may
   score low on passive PAD (LFW photos: ~0.42) and fail the e2e enrolment liveness gate; run that test with `PAD_LIVE_THRESHOLD=0.3` when using such images.
 - Uvicorn `--reload` watches `.venv` too — start it with `--reload-dir app`.
+- **Windows dev server cannot hold >~500 sockets**: with `--reload` uvicorn uses the select()-based loop (512 fd cap) and the
+  worker dies with `ValueError: too many file descriptors in select()`; the reloader does not restart it (touch a file in
+  `app/` to revive). Load-test against a second instance started *without* `--reload` (Proactor loop), e.g. `--port 8001`.
+  Production (Linux/Docker, epoll) has no such cap.
+- **Load generators on Windows**: a fresh TCP connection per request costs ~200 ms and serialises (~4 req/s); use one
+  keep-alive client (`benchmarks/load_test.py` and the login probe do), or run the generator from a Linux container.
+- Argon2id is at OWASP cost (19 MiB, t=2, p=1): ~70 verifies/s on an 8-thread laptop vs ~13/s at the old 64 MiB/t=3 (memory-
+  bandwidth bound, no thread scaling). Old hashes verify and are re-hashed on the next login; verification runs via
+  `asyncio.to_thread` so it never blocks the event loop.
 - Benchmark on an otherwise idle CPU; background load skews every stage.
 - `zoneinfo` on Windows needs the `tzdata` package (already in requirements).
 - SFace's ONNX graph has a fixed batch of 1 — flip test-time augmentation is two runs, not a batch.

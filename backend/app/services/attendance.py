@@ -69,13 +69,47 @@ async def open_session_state(db: AsyncSession, employee_id: str, day: date) -> t
     return (events[-1] if events else None), events
 
 
+async def last_checkout(db: AsyncSession, employee_id: str) -> AttendanceEvent | None:
+    """The employee's most recent non-voided check-out on any day (the re-login cooldown counts from it)."""
+    res = await db.execute(
+        select(AttendanceEvent)
+        .where(and_(AttendanceEvent.employee_id == employee_id, AttendanceEvent.action == AttendanceAction.check_out, AttendanceEvent.voided.is_(False)))
+        .order_by(AttendanceEvent.occurred_at.desc())
+        .limit(1)
+    )
+    ev = res.scalar_one_or_none()
+    if ev is not None:
+        ev.occurred_at = _aware(ev.occurred_at)
+    return ev
+
+
+async def login_cooldown(db: AsyncSession, employee_id: str, org: OrgSettings, now: datetime) -> tuple[datetime | None, datetime | None]:
+    """(last_checkout_at, login_allowed_at) when the next login is still inside the cooldown, else (x, None)."""
+    if org.relogin_cooldown_hours <= 0:
+        return None, None
+    lo = await last_checkout(db, employee_id)
+    if lo is None:
+        return None, None
+    allowed = lo.occurred_at + timedelta(hours=org.relogin_cooldown_hours)
+    return lo.occurred_at, (allowed if now < allowed else None)
+
+
+def _fmt_local(ts: datetime, org: OrgSettings) -> str:
+    return ts.astimezone(ZoneInfo(org.timezone)).strftime("%I:%M %p on %a %d %b").lstrip("0")
+
+
 async def next_expected_action(db: AsyncSession, employee_id: str, org: OrgSettings, now: datetime | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
     day = attendance_date_for(now, org)
     last, events = await open_session_state(db, employee_id, day)
     if last is None or last.action == AttendanceAction.check_out:
-        return {"next": "check_in", "last_event": None if last is None else _event_dict(last), "attendance_date": day.isoformat()}
-    return {"next": "check_out", "last_event": _event_dict(last), "attendance_date": day.isoformat()}
+        last_out, allowed = await login_cooldown(db, employee_id, org, now)
+        return {"next": "check_in", "last_event": None if last is None else _event_dict(last), "attendance_date": day.isoformat(),
+                # Set while the re-login cooldown is still running: the UI shows it instead of offering a login that would be refused.
+                "login_allowed_at": allowed.isoformat() if allowed else None, "last_checkout_at": last_out.isoformat() if last_out else None,
+                "cooldown_hours": org.relogin_cooldown_hours}
+    return {"next": "check_out", "last_event": _event_dict(last), "attendance_date": day.isoformat(), "login_allowed_at": None, "last_checkout_at": None,
+            "cooldown_hours": org.relogin_cooldown_hours}
 
 
 def _event_dict(e: AttendanceEvent) -> dict:
@@ -114,6 +148,13 @@ async def record_event(
     if action == AttendanceAction.check_in:
         if last is not None and last.action == AttendanceAction.check_in:
             raise AttendanceError("already_checked_in", "You are already checked in. Choose Check Out instead.")
+        # Re-login cooldown: after a logout the next login is refused until `relogin_cooldown_hours` have passed.
+        last_out, allowed = await login_cooldown(db, employee.id, org, now)
+        if allowed is not None:
+            left = allowed - now
+            h, m = divmod(int(left.total_seconds() // 60), 60)
+            raise AttendanceError("cooldown", f"You logged out at {_fmt_local(last_out, org)}. A new login is allowed only {org.relogin_cooldown_hours} hours after a logout, "
+                                              f"so you can log in again from {_fmt_local(allowed, org)} ({h}h {m:02d}m from now).")
     else:
         if last is None or last.action == AttendanceAction.check_out:
             raise AttendanceError("not_checked_in", "No open check-in found for today. Choose Check In instead.")
@@ -178,7 +219,7 @@ async def recompute_day(db: AsyncSession, employee_id: str, day: date, org: OrgS
     row.early_leave_minutes = early
     row.is_open = open_in is not None
     if not events:
-        row.status = "absent"
+        row.status = "leave" if row.status == "leave" else "absent"  # leave is set by an admin correction, never derived
     elif open_in is not None and datetime.now(timezone.utc) - open_in > timedelta(hours=org.auto_close_after_hours):
         row.status = "missing_checkout"
     elif late > 0:
@@ -187,6 +228,21 @@ async def recompute_day(db: AsyncSession, employee_id: str, day: date, org: OrgS
         row.status = "present"
     await db.flush()
     return row
+
+
+async def recompute_recent_days(db: AsyncSession, org: OrgSettings, days: int = 31) -> int:
+    """Re-derive lateness / early-leave / status for every day summary in the last `days` days under the current
+    organisation rules (called after the time zone or work hours change). Events keep the attendance date they were
+    recorded under; admin-set `corrected` and `leave` markers are preserved."""
+    since = attendance_date_for(datetime.now(timezone.utc), org) - timedelta(days=days)
+    rows = (await db.execute(select(AttendanceDay).where(AttendanceDay.attendance_date >= since))).scalars().all()
+    for row in rows:
+        keep = row.status if row.status in ("corrected", "leave") else None
+        new = await recompute_day(db, row.employee_id, row.attendance_date, org)
+        if keep and new.status in ("present", "late", "absent"):
+            new.status = keep
+    await db.flush()
+    return len(rows)
 
 
 async def flag_missing_checkouts(db: AsyncSession, org: OrgSettings) -> int:
@@ -214,11 +270,30 @@ async def apply_correction(
     action: AttendanceAction | None = None,
     occurred_at: datetime | None = None,
 ) -> AttendanceCorrection:
-    """add: insert a manual event; void: mark an event voided; adjust: void + add at a new time."""
+    """add: insert a manual event; void: mark an event voided; adjust: void + add at a new time;
+    leave / clear_leave: mark a day without events as approved leave (or back to absent)."""
     if len(reason.strip()) < 5:
         raise AttendanceError("reason_required", "A meaningful reason is required for corrections.")
     before = after = None
     target_day: date | None = None
+
+    if kind in ("leave", "clear_leave"):
+        if occurred_at is None:
+            raise AttendanceError("invalid", "occurred_at (any time on the day) is required.")
+        if occurred_at.tzinfo is None:
+            occurred_at = occurred_at.replace(tzinfo=timezone.utc)
+        target_day = attendance_date_for(occurred_at, org)
+        _, events = await open_session_state(db, employee.id, target_day)
+        if events:
+            raise AttendanceError("has_events", "This day has attendance events; void them before marking it as leave.")
+        row = await recompute_day(db, employee.id, target_day, org)  # creates the (absent) day row if needed
+        before = {"status": row.status}
+        row.status = "leave" if kind == "leave" else "absent"
+        after = {"status": row.status}
+        corr = AttendanceCorrection(employee_id=employee.id, attendance_date=target_day, event_id=None, kind=kind, before=before, after=after, reason=reason, created_by=actor_id)
+        db.add(corr)
+        await db.flush()
+        return corr
 
     if kind in ("void", "adjust"):
         ev = await db.get(AttendanceEvent, event_id) if event_id else None

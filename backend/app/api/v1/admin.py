@@ -120,7 +120,12 @@ async def patch_settings(body: SettingsPatch, request: Request, db: AsyncSession
         except (ZoneInfoNotFoundError, ValueError):
             raise HTTPException(422, f"Unknown timezone '{patch['timezone']}' — use an IANA name such as Europe/London")
     org = await update_org_settings(db, patch, user.id)
-    await audit(db, "settings.update", actor=user, target_type="settings", detail=patch, request=request)
+    recomputed = 0
+    if {"timezone", "work_start", "work_end", "day_start", "late_grace_minutes"} & patch.keys():
+        from app.services.attendance import recompute_recent_days
+
+        recomputed = await recompute_recent_days(db, org)  # lateness and status follow the new rules immediately
+    await audit(db, "settings.update", actor=user, target_type="settings", detail={**patch, "recomputed_days": recomputed}, request=request)
     await db.commit()
     return asdict(org)
 

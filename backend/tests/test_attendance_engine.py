@@ -1,7 +1,7 @@
 """Attendance engine state machine: check-in/out ordering, duplicates, overnight day boundary, lateness, corrections."""
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import select
@@ -21,6 +21,7 @@ def org(tz: str = "UTC"):
     o.timezone = tz
     o.day_start, o.work_start, o.work_end = "04:00", "09:00", "17:30"
     o.late_grace_minutes, o.duplicate_scan_seconds = 10, 120
+    o.relogin_cooldown_hours = 0  # the cycle test below re-enters the same day; the cooldown has its own test
     return o
 
 
@@ -77,6 +78,25 @@ async def test_checkin_checkout_cycle_and_rules(db):
     await record_event(db, employee=emp, action=AttendanceAction.check_in, method=AttendanceMethod.face, org=o, occurred_at=utc(TODAY.year, TODAY.month, TODAY.day, 18, 0))
     r3 = await record_event(db, employee=emp, action=AttendanceAction.check_out, method=AttendanceMethod.face, org=o, occurred_at=utc(TODAY.year, TODAY.month, TODAY.day, 19, 0))
     assert r3.day.worked_minutes == 7 * 60 + 35 + 60
+
+
+async def test_relogin_cooldown_blocks_early_login(db):
+    o = org()
+    o.relogin_cooldown_hours = 10
+    emp = await _employee(db)
+    y, mo, d = TODAY.year, TODAY.month, TODAY.day
+    await record_event(db, employee=emp, action=AttendanceAction.check_in, method=AttendanceMethod.face, org=o, occurred_at=utc(y, mo, d, 9, 0))
+    await record_event(db, employee=emp, action=AttendanceAction.check_out, method=AttendanceMethod.face, org=o, occurred_at=utc(y, mo, d, 17, 0))
+    nxt = await next_expected_action(db, emp.id, o, now=utc(y, mo, d, 18, 0))
+    assert nxt["next"] == "check_in" and nxt["login_allowed_at"] == (utc(y, mo, d, 17, 0) + timedelta(hours=10)).isoformat() and nxt["cooldown_hours"] == 10
+    with pytest.raises(AttendanceError) as e:  # 1 h after logout: refused with a clear message
+        await record_event(db, employee=emp, action=AttendanceAction.check_in, method=AttendanceMethod.face, org=o, occurred_at=utc(y, mo, d, 18, 0))
+    assert e.value.code == "cooldown" and "log in again from" in e.value.message
+    # 10 h after the logout (03:00, still the same attendance day since the day starts at 04:00) it is allowed again
+    r = await record_event(db, employee=emp, action=AttendanceAction.check_in, method=AttendanceMethod.face, org=o, occurred_at=utc(y, mo, d, 17, 0) + timedelta(hours=10))
+    assert r.day.is_open
+    nxt = await next_expected_action(db, emp.id, o, now=utc(y, mo, d, 17, 0) + timedelta(hours=10, minutes=5))
+    assert nxt["next"] == "check_out" and nxt["login_allowed_at"] is None
 
 
 async def test_inactive_employee_rejected(db):

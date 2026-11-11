@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'motion/react'
 import { AlertTriangle, ArrowLeft, Check, CheckCircle2, RefreshCw, Save, ShieldCheck } from 'lucide-react'
 import { CameraStage, type StageMode } from '../../components/camera/CameraStage'
+import { FrameAlerts } from '../../components/camera/FrameAlerts'
 import { useCamera } from '../../components/camera/useCamera'
 import { useVerificationStream } from '../../components/camera/useVerificationStream'
 import { Button } from '../../components/ui/Button'
@@ -127,6 +128,7 @@ export default function Enrolment() {
                       <Metric label="Liveness" value={fb?.liveness ? `${Math.round(fb.liveness.score * 100)}%` : '—'} ok={!!fb?.liveness?.passed} />
                       <Metric label="Head pose" value={fb?.yaw != null ? `${fb.yaw > 0 ? '→' : '←'} ${Math.abs(fb.yaw).toFixed(0)}°` : '—'} ok={!!fb?.pose_ok} />
                     </dl>
+                    <FrameAlerts fb={step === 'capture' ? fb : null} subject="the largest face (the employee being enrolled)" className="mt-4" />
                     {saveError && (
                       <div role="alert" className="mt-4 flex gap-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
                         <AlertTriangle className="size-5 shrink-0" />
@@ -153,6 +155,12 @@ export default function Enrolment() {
                     <h3 className="mt-4 text-xl font-semibold">Enrolment saved</h3>
                     <p className="mt-1 text-sm text-ink-3">{saved.template_count} templates · quality {Math.round((saved.quality_score ?? 0) * 100)}% · liveness {Math.round((saved.liveness_score ?? 0) * 100)}%</p>
                     <p className="mt-3 text-sm text-ink-2">{e.first_name} can now check in at the kiosk. Raw images from this session have been discarded.</p>
+                    {saved.liveness_low && (
+                      <p className="mt-3 flex gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-left text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                        <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                        <span>Passive liveness was low ({Math.round((saved.liveness_score ?? 0) * 100)}%) but above the spoof limit, so the enrolment was saved on your in-person confirmation. Even light on the face raises the score; on the <em>passive</em> kiosk policy this person may be asked for a head turn.</span>
+                      </p>
+                    )}
                     <div className="mt-6 flex justify-center gap-2">
                       <Button onClick={() => navigate(`/admin/employees/${id}`)}>Back to profile</Button>
                       <Button variant="outline" onClick={() => { toast.info('Open the kiosk to test the new enrolment'); navigate('/kiosk') }}>Test at kiosk</Button>

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import io
 from datetime import datetime, timedelta, timezone
 
@@ -17,6 +18,7 @@ from app.core.security import (
     create_access_token,
     hash_password,
     hash_refresh,
+    needs_rehash,
     new_refresh_token,
     new_totp_secret,
     totp_uri,
@@ -61,11 +63,12 @@ async def login(body: LoginIn, request: Request, response: Response, db: AsyncSe
     now = datetime.now(timezone.utc)
     generic = HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid username/email or password")
     if user is None:
-        verify_password(body.password, _DUMMY_HASH)  # keep timing similar for unknown emails
+        await asyncio.to_thread(verify_password, body.password, _DUMMY_HASH)  # keep timing similar for unknown emails
         raise generic
     if user.locked_until and user.locked_until > now:
         raise HTTPException(status.HTTP_423_LOCKED, f"Account locked. Try again after {user.locked_until.strftime('%H:%M UTC')}.")
-    if not user.is_active or not verify_password(body.password, user.password_hash):
+    # Argon2id costs ~100-200 ms of CPU: hash off the event loop so simultaneous logins overlap across cores.
+    if not user.is_active or not await asyncio.to_thread(verify_password, body.password, user.password_hash):
         user.failed_logins += 1
         if user.failed_logins >= settings.login_max_attempts:
             user.locked_until = now + timedelta(minutes=settings.login_lockout_minutes)
@@ -90,6 +93,8 @@ async def login(body: LoginIn, request: Request, response: Response, db: AsyncSe
     raw, h = new_refresh_token()
     db.add(RefreshSession(user_id=user.id, token_hash=h, expires_at=now + timedelta(days=settings.refresh_token_days),
                           user_agent=(request.headers.get("user-agent") or "")[:255], ip=client_ip(request)))
+    if needs_rehash(user.password_hash):  # transparent upgrade to the current Argon2 parameters
+        user.password_hash = await asyncio.to_thread(hash_password, body.password)
     await audit(db, "auth.login", actor=user, request=request)
     await db.commit()
     set_auth_cookies(response, create_access_token(user.id, user.role.value, True), raw)
@@ -128,6 +133,20 @@ async def logout(request: Request, response: Response, db: AsyncSession = Depend
             await db.commit()
     _clear_cookies(response)
     return Response(status_code=204)
+
+
+@router.get("/test-accounts")
+async def test_accounts(db: AsyncSession = Depends(get_db)):
+    """Development only: the active accounts the sign-in page offers as one-click test logins (usernames and names,
+    never passwords; the seed default is shown on the page). Returns 404 unless ENVIRONMENT=development, so a
+    production build never lists accounts to anonymous visitors."""
+    if settings.environment != "development":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+    rows = (await db.execute(
+        select(UserAccount, Employee).outerjoin(Employee, Employee.id == UserAccount.employee_id)
+        .where(UserAccount.is_active.is_(True)).order_by(UserAccount.username).limit(50)
+    )).all()
+    return [{"username": u.username or u.email, "role": u.role.value, "name": e.full_name if e else (u.username or u.email), "code": e.employee_code if e else None} for u, e in rows]
 
 
 @router.get("/me", response_model=UserOut)

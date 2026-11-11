@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode, type RefObject } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Camera, CameraOff, Loader2 } from 'lucide-react'
 import { cn } from '../../lib/cn'
+import { fmtTime } from '../../lib/format'
 import type { FrameFeedback } from '../../lib/types'
 import type { CameraStatus } from './useCamera'
 
@@ -96,6 +97,31 @@ export function CameraStage({ videoRef, status, error, feedback, mode, sentSize,
           ctx.fillStyle = 'rgba(255,255,255,0.8)'
           for (const [lx, ly] of fb.face.landmarks) { ctx.beginPath(); ctx.arc(toX(lx), toY(ly), 2.2, 0, Math.PI * 2); ctx.fill() }
         }
+      }
+      // Bystanders: thin dashed box and a label saying who they are and whether they are signed in.
+      for (const o of fb?.others ?? []) {
+        const [bx, by, bw, bh] = o.box
+        const x1 = Math.min(toX(bx), toX(bx + bw)), x2 = Math.max(toX(bx), toX(bx + bw))
+        const y1 = toY(by), y2 = toY(by + bh)
+        const known = !!o.name
+        const col = known ? (o.signed_in ? 'rgba(52,211,153,0.95)' : 'rgba(251,191,36,0.95)') : 'rgba(255,255,255,0.75)'
+        const since = o.since ? fmtTime(o.since) : ''
+        const label = known ? `${o.name!.split(' ')[0]} · ${o.signed_in ? `signed in ${since}`.trim() : 'not signed in'}` : 'Unknown person'
+        ctx.save()
+        ctx.strokeStyle = col
+        ctx.lineWidth = 1.5
+        ctx.setLineDash([5, 5])
+        ctx.strokeRect(x1, y1, x2 - x1, y2 - y1)
+        ctx.setLineDash([])
+        ctx.font = '600 12px Inter, system-ui, sans-serif'
+        const tw = ctx.measureText(label).width + 14
+        const lx = Math.max(4, Math.min(rect.width - tw - 4, x1))
+        const ly = Math.max(4, y1 - 22)
+        ctx.fillStyle = 'rgba(0,0,0,0.62)'
+        ctx.beginPath(); ctx.roundRect(lx, ly, tw, 18, 5); ctx.fill()
+        ctx.fillStyle = col
+        ctx.fillText(label, lx + 7, ly + 13)
+        ctx.restore()
       }
       raf.current = requestAnimationFrame(draw)
     }

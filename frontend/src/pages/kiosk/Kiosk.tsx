@@ -6,16 +6,21 @@ import { Logo } from '../../components/layout/Logo'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Field'
 import { CameraStage, type StageMode } from '../../components/camera/CameraStage'
+import { FrameAlerts } from '../../components/camera/FrameAlerts'
 import { useCamera } from '../../components/camera/useCamera'
 import { useVerificationStream } from '../../components/camera/useVerificationStream'
 import { api, ApiError } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
-import { fmtTime } from '../../lib/format'
+import { fmtDate, fmtDateTime, fmtTime } from '../../lib/format'
 import { popVariants, spring } from '../../lib/motion'
 import type { AttendanceAction, AttendanceEvent, FrameFeedback } from '../../lib/types'
 import { cn } from '../../lib/cn'
 
 type Screen = 'welcome' | 'scanning' | 'identified' | 'recorded' | 'failed' | 'pin'
+
+/** After identification the engine allows exactly one action; it is recorded hands-free after this many seconds
+ * unless the person taps Cancel ("Not you?") first. Tapping the button records it immediately. */
+const AUTO_CONFIRM_SECONDS = 3
 
 const REASON_TEXT: Record<string, string> = {
   spoof: 'Liveness check failed. Please use the live camera — not a photo, phone or screen.',
@@ -32,6 +37,7 @@ export default function Kiosk() {
   const [recorded, setRecorded] = useState<AttendanceEvent | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [busyAction, setBusyAction] = useState<AttendanceAction | null>(null)
+  const [countdown, setCountdown] = useState(AUTO_CONFIRM_SECONDS)
   const cameraOn = screen !== 'pin'  // keep the camera warm so 'Try again' is instant
   const cam = useCamera(cameraOn)
   const [clock, setClock] = useState(new Date())
@@ -47,12 +53,12 @@ export default function Kiosk() {
   const { start: streamStart, stop: streamStop } = stream
 
   const begin = useCallback(() => {
-    setResult(null); setRecorded(null); setActionError(null)
+    setResult(null); setRecorded(null); setActionError(null); setCountdown(AUTO_CONFIRM_SECONDS)
     setScreen('scanning')
     void streamStart()
   }, [streamStart])
 
-  const reset = useCallback(() => { streamStop(); setScreen('welcome'); setResult(null); setRecorded(null); setActionError(null) }, [streamStop])
+  const reset = useCallback(() => { streamStop(); setScreen('welcome'); setResult(null); setRecorded(null); setActionError(null); setCountdown(AUTO_CONFIRM_SECONDS) }, [streamStop])
 
   // After a recorded event: if the server signed the employee's own account in, hand over to their dashboard once the
   // greeting has played; otherwise return to the welcome screen so the kiosk is ready for the next person.
@@ -67,7 +73,7 @@ export default function Kiosk() {
   }, [screen, handoff, reset, streamStop, refreshAuth, navigate])
 
   const record = async (action: AttendanceAction) => {
-    if (!result?.token) return
+    if (!result?.token || busyAction) return
     setBusyAction(action); setActionError(null)
     try {
       const ev = await api.post<AttendanceEvent>('/attendance/events', { token: result.token, action, device_label: 'kiosk-web', open_portal: true })
@@ -77,6 +83,22 @@ export default function Kiosk() {
     } finally { setBusyAction(null) }
   }
 
+  // Hands-free confirmation: count down on the identified screen, then record the one action the engine allows.
+  const recordRef = useRef(record)
+  useEffect(() => { recordRef.current = record })
+  // Re-login cooldown from the engine: no button and no auto-confirm, just the time it becomes allowed.
+  const blockedUntil = result?.next?.next === 'check_in' ? result.next.login_allowed_at ?? null : null
+  useEffect(() => {
+    if (screen !== 'identified' || !result?.token || actionError || blockedUntil) return
+    const started = Date.now()
+    const t = setInterval(() => {
+      const left = AUTO_CONFIRM_SECONDS - Math.floor((Date.now() - started) / 1000)
+      if (left <= 0) { clearInterval(t); setCountdown(0); void recordRef.current(result.next?.next ?? 'check_in') }
+      else setCountdown(left)
+    }, 250)
+    return () => clearInterval(t)
+  }, [screen, result, actionError, blockedUntil])
+
   const fb = stream.feedback
   const stageMode: StageMode = screen === 'recorded' || screen === 'identified' ? 'success' : screen === 'failed' ? 'failure' : screen === 'scanning' ? 'scanning' : 'idle'
 
@@ -85,8 +107,8 @@ export default function Kiosk() {
       <header className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
         <Link to="/" className="flex items-center gap-2.5"><Logo className="size-8" /><span className="text-[15px] font-semibold">FaceGate</span></Link>
         <div className="text-right">
-          <p className="text-2xl font-semibold tabular leading-none">{clock.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-          <p className="text-xs text-ink-3">{clock.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+          <p className="text-2xl font-semibold tabular leading-none">{fmtTime(clock.toISOString())}</p>
+          <p className="text-xs text-ink-3">{fmtDate(clock.toISOString(), 'EEEE, d MMMM')}</p>
         </div>
       </header>
 
@@ -117,6 +139,7 @@ export default function Kiosk() {
                 <p className="text-xs font-semibold uppercase tracking-wider text-accent-400">Verifying</p>
                 <h2 className="mt-2 text-2xl font-semibold leading-tight" aria-live="polite">{guidanceFor(fb, stream.phase, stream.error)}</h2>
                 <Steps fb={fb} />
+                <FrameAlerts fb={fb} className="mt-4" />
                 <Button variant="ghost" className="mt-auto self-start text-ink-3" onClick={reset} leftIcon={<ArrowLeft className="size-4" />}>Cancel</Button>
               </Panel>
             )}
@@ -128,10 +151,23 @@ export default function Kiosk() {
                 <h2 className="mt-1 text-3xl font-semibold leading-tight">Hello, {result.employee.name.split(' ')[0]}</h2>
                 <p className="text-ink-3">{result.employee.name} · {result.employee.code}</p>
                 <TimesRow firstIn={result.today?.first_in} lastOut={result.today?.last_out} />
-                <div className="mt-6 grid gap-3">
-                  <ActionButton action={result.next?.next ?? 'check_in'} suggested busy={busyAction} onClick={() => record(result.next?.next ?? 'check_in')} />
-                </div>
-                <p className="mt-3 text-xs text-ink-3">{result.next?.next === 'check_in' ? 'You are not logged in yet, so only Login is offered.' : 'You are logged in, so only Logout is offered.'}</p>
+                {blockedUntil ? (
+                  <div role="alert" className="mt-6 rounded-xl border border-red-400/40 bg-red-500/10 p-4 text-sm text-ink-2">
+                    <p className="flex items-center gap-2 font-semibold text-red-300"><XCircle className="size-4" aria-hidden /> Login not allowed yet</p>
+                    <p className="mt-1.5">You logged out at <span className="tabular font-medium text-ink">{fmtTime(result.next?.last_checkout_at)}</span>. A new login is allowed only {result.next?.cooldown_hours} hours after a logout, so you can log in again from <strong className="tabular text-ink">{fmtDateTime(blockedUntil)}</strong>.</p>
+                  </div>
+                ) : (
+                  <div className="mt-6 grid gap-3">
+                    <ActionButton action={result.next?.next ?? 'check_in'} suggested busy={busyAction} onClick={() => record(result.next?.next ?? 'check_in')} />
+                  </div>
+                )}
+                {!blockedUntil && !busyAction && !actionError && countdown > 0 && (
+                  <p className="mt-3 text-sm text-ink-2" aria-live="polite">
+                    Recording automatically in <span className="tabular font-semibold text-ink">{countdown}</span> s. Tap the button to do it now.
+                    <span className="mt-2 block h-1 w-full overflow-hidden rounded-full bg-surface-3"><motion.span className="block h-full rounded-full bg-accent-500" initial={{ width: '0%' }} animate={{ width: '100%' }} transition={{ duration: AUTO_CONFIRM_SECONDS, ease: 'linear' }} /></span>
+                  </p>
+                )}
+                {!blockedUntil && <p className="mt-3 text-xs text-ink-3">{result.next?.next === 'check_in' ? 'You are not logged in yet today, so only Login is offered. Your login time is recorded the moment it is confirmed.' : 'You are logged in, so only Logout is offered.'}</p>}
                 {actionError && <p role="alert" className="mt-3 rounded-md border border-red-400/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">{actionError}</p>}
                 <p className="mt-4 text-xs text-ink-3">Not you? <button className="underline hover:text-ink" onClick={reset}>Cancel</button></p>
               </Panel>

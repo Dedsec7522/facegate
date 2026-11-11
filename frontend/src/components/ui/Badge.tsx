@@ -22,8 +22,8 @@ export function Badge({ tone = 'neutral', className, dot, children, ...props }: 
   )
 }
 
-export const dayStatusTone: Record<DayStatus, Tone> = { present: 'success', late: 'warning', missing_checkout: 'danger', absent: 'neutral', corrected: 'info' }
-export const dayStatusLabel: Record<DayStatus, string> = { present: 'Present', late: 'Late', missing_checkout: 'Missing check-out', absent: 'Absent', corrected: 'Corrected' }
+export const dayStatusTone: Record<DayStatus, Tone> = { present: 'success', late: 'warning', missing_checkout: 'danger', absent: 'neutral', corrected: 'info', leave: 'warning' }
+export const dayStatusLabel: Record<DayStatus, string> = { present: 'Present', late: 'Late', missing_checkout: 'Missing check-out', absent: 'Absent', corrected: 'Corrected', leave: 'Leave' }
 
 export function StatusBadge({ status }: { status: DayStatus }) {
   return <Badge tone={dayStatusTone[status]} dot>{dayStatusLabel[status]}</Badge>

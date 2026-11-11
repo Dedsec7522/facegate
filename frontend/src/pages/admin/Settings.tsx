@@ -3,7 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { KeyRound, ShieldCheck, ShieldOff } from 'lucide-react'
 import { api, ApiError } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
-import { fmtDateTime } from '../../lib/format'
+import { fmtDateTime, setDisplayTimeZone } from '../../lib/format'
+import { RegionPicker } from '../../components/RegionPicker'
 import type { AuditEntry, OrgSettings } from '../../lib/types'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -40,7 +41,7 @@ function OrgSettingsForm({ section, readOnly }: { section: 'rules' | 'verificati
   const q = useQuery({ queryKey: ['settings'], queryFn: () => api.get<OrgSettings>('/settings') })
   const [form, setForm] = useState<OrgSettings | null>(null)
   useEffect(() => { if (q.data) setForm(q.data) }, [q.data])
-  const save = useMutation({ mutationFn: (body: Partial<OrgSettings>) => api.patch<OrgSettings>('/settings', body), onSuccess: (s) => { toast.success('Settings saved'); qc.setQueryData(['settings'], s) }, onError: (e: ApiError) => toast.error('Could not save settings', e.message) })
+  const save = useMutation({ mutationFn: (body: Partial<OrgSettings>) => api.patch<OrgSettings>('/settings', body), onSuccess: (s) => { toast.success('Settings saved'); qc.setQueryData(['settings'], s); setDisplayTimeZone(s.timezone); void qc.invalidateQueries() }, onError: (e: ApiError) => toast.error('Could not save settings', e.message) })
   if (q.isLoading || !form) return <Skeleton className="h-80" />
   const set = <K extends keyof OrgSettings>(k: K, v: OrgSettings[K]) => setForm({ ...form, [k]: v })
   const dirty = JSON.stringify(form) !== JSON.stringify(q.data)
@@ -54,13 +55,14 @@ function OrgSettingsForm({ section, readOnly }: { section: 'rules' | 'verificati
     <Card>
       <CardHeader title="Attendance rules" description="Apply to every employee. Times are in the organisation timezone." />
       <CardBody className="grid gap-4 sm:grid-cols-2">
-        <Input label="Organisation timezone" hint="IANA name, e.g. Europe/London" value={form.timezone} onChange={(e) => set('timezone', e.target.value)} disabled={readOnly} wrapperClassName="sm:col-span-2" />
+        <div className="sm:col-span-2"><RegionPicker value={form.timezone} onChange={(tz) => set('timezone', tz)} disabled={readOnly} /></div>
         <Input label="Attendance day starts at" type="time" hint="Events before this belong to the previous day (overnight shifts)." value={form.day_start} onChange={(e) => set('day_start', e.target.value)} disabled={readOnly} />
         <Input label="Late grace (minutes)" type="number" min={0} max={180} value={form.late_grace_minutes} onChange={(e) => set('late_grace_minutes', Number(e.target.value))} disabled={readOnly} />
         <Input label="Work start" type="time" value={form.work_start} onChange={(e) => set('work_start', e.target.value)} disabled={readOnly} />
         <Input label="Work end" type="time" value={form.work_end} onChange={(e) => set('work_end', e.target.value)} disabled={readOnly} />
         <Input label="Duplicate scan window (seconds)" type="number" min={0} max={3600} hint="Repeated events inside this window are rejected." value={form.duplicate_scan_seconds} onChange={(e) => set('duplicate_scan_seconds', Number(e.target.value))} disabled={readOnly} />
         <Input label="Flag missing check-out after (hours)" type="number" min={1} max={48} value={form.auto_close_after_hours} onChange={(e) => set('auto_close_after_hours', Number(e.target.value))} disabled={readOnly} />
+        <Input label="Minimum gap between a logout and the next login (hours)" type="number" min={0} max={48} hint="A login attempted earlier is refused with the time it becomes allowed. 0 disables (allows same-day re-entry, e.g. lunch breaks)." value={form.relogin_cooldown_hours} onChange={(e) => set('relogin_cooldown_hours', Number(e.target.value))} disabled={readOnly} wrapperClassName="sm:col-span-2" />
       </CardBody>
       {footer}
     </Card>

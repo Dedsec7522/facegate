@@ -27,6 +27,8 @@ class FrameAnalysis:
     aligned: np.ndarray | None
     timings_ms: dict[str, float] = field(default_factory=dict)
     state: str = "no_face"  # no_face | multiple_faces | quality | ok
+    # Every other face in the frame (largest first): box, detector score and, when asked for, who it is.
+    others: list[dict] = field(default_factory=list)
 
 
 class VisionPipeline:
@@ -42,20 +44,26 @@ class VisionPipeline:
         self._sem = asyncio.Semaphore(settings.inference_workers * 2)
 
     # ---- sync core ---------------------------------------------------------------------------
-    def analyse(self, bgr: np.ndarray, *, want_embedding: bool = True, want_pad: bool = True, max_yaw: float = 35.0) -> FrameAnalysis:
+    def analyse(self, bgr: np.ndarray, *, want_embedding: bool = True, want_pad: bool = True, max_yaw: float = 35.0,
+                want_others: bool = False) -> FrameAnalysis:
+        """Analyse one frame. The subject is the largest face (the person closest to the camera); everyone else in
+        the frame is listed in `others` and, with `want_others`, identified against the template index so the UI
+        can say who they are. Two faces of about the same size mean we cannot tell who is checking in, which is
+        the only case that still stops the frame (`multiple_faces`)."""
         t: dict[str, float] = {}
         t0 = time.perf_counter()
-        faces = self.detector.detect(bgr)
+        faces = self.detector.detect(bgr)  # largest first
         t["detect"] = (time.perf_counter() - t0) * 1000
         if not faces:
             return FrameAnalysis(faces, None, None, None, None, None, t, "no_face")
-        big = [f for f in faces if f.size >= settings.min_face_size * 0.6]
-        if len(big) > 1:
-            return FrameAnalysis(faces, big[0], None, None, None, None, t, "multiple_faces")
         face = faces[0]
+        others = self._describe_others(bgr, faces[1:], want_others, t)
+        big = [f for f in faces if f.size >= settings.min_face_size * 0.6]
+        if len(big) > 1 and big[1].size >= big[0].size * settings.primary_face_margin:
+            return FrameAnalysis(faces, face, None, None, None, None, t, "multiple_faces", others)
         q = assess(bgr, face, max_yaw=max_yaw)
         if not q.ok:
-            return FrameAnalysis(faces, face, q, None, None, None, t, "quality")
+            return FrameAnalysis(faces, face, q, None, None, None, t, "quality", others)
         live = None
         if want_pad:
             t1 = time.perf_counter()
@@ -67,7 +75,24 @@ class VisionPipeline:
             aligned = self.embedder.align(bgr, face.landmarks)
             emb = self.embedder.embed(aligned)
             t["embed"] = (time.perf_counter() - t2) * 1000
-        return FrameAnalysis(faces, face, q, live, emb, aligned, t, "ok")
+        return FrameAnalysis(faces, face, q, live, emb, aligned, t, "ok", others)
+
+    def _describe_others(self, bgr: np.ndarray, faces: list[Face], identify: bool, t: dict[str, float]) -> list[dict]:
+        """Boxes of the non-subject faces; with `identify`, the closest few are embedded and matched (no PAD or
+        quality gates: this only labels bystanders, it never records attendance for them)."""
+        out: list[dict] = []
+        if not faces:
+            return out
+        t0 = time.perf_counter()
+        for f in faces[: settings.max_other_faces]:
+            item: dict = {"box": list(f.box), "score": round(f.score, 3), "employee_id": None, "match_score": None}
+            if identify and f.size >= settings.min_face_size * 0.6 and self.index.size:
+                m = self.index.match(self.embedder.embed(self.embedder.align(bgr, f.landmarks)))
+                item["employee_id"] = m.employee_id if m.decision == "identified" else None
+                item["match_score"] = round(m.score, 3)
+            out.append(item)
+        t["others"] = (time.perf_counter() - t0) * 1000
+        return out
 
     # ---- async wrappers ----------------------------------------------------------------------
     async def analyse_async(self, bgr: np.ndarray, **kw) -> FrameAnalysis:

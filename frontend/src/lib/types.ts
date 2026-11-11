@@ -77,7 +77,7 @@ export interface AttendanceEvent {
   portal_session?: { role: Role; expires_in_minutes: number } | null
 }
 
-export type DayStatus = 'present' | 'late' | 'missing_checkout' | 'absent' | 'corrected'
+export type DayStatus = 'present' | 'late' | 'missing_checkout' | 'absent' | 'corrected' | 'leave'
 
 export interface AttendanceDay {
   id: string
@@ -150,7 +150,7 @@ export interface Correction {
   employee_id: string
   attendance_date: string | null
   event_id: string | null
-  kind: 'add' | 'void' | 'adjust'
+  kind: 'add' | 'void' | 'adjust' | 'leave' | 'clear_leave'
   before: Record<string, unknown> | null
   after: Record<string, unknown> | null
   reason: string
@@ -166,6 +166,7 @@ export interface OrgSettings {
   late_grace_minutes: number
   duplicate_scan_seconds: number
   auto_close_after_hours: number
+  relogin_cooldown_hours: number
   match_accept_threshold: number
   pad_live_threshold: number
   require_challenge: boolean
@@ -210,16 +211,39 @@ export interface VerifySession {
   employee?: { id: string; name: string; code: string }
 }
 
+/** A face in the frame other than the subject. Identified and labelled by the server; never checked in. */
+export interface OtherFace {
+  box: [number, number, number, number]
+  score: number
+  employee_id: string | null
+  match_score: number | null
+  name?: string | null
+  code?: string | null
+  signed_in?: boolean | null
+  since?: string | null
+}
+
+/** What the attendance engine will accept next. `login_allowed_at` is set while the re-login cooldown still runs. */
+export interface NextAction {
+  next: AttendanceAction
+  last_event: { id: string; action: AttendanceAction; occurred_at: string; method: AttendanceMethod } | null
+  attendance_date: string
+  login_allowed_at?: string | null
+  last_checkout_at?: string | null
+  cooldown_hours?: number
+}
+
 export interface FrameFeedback {
   state: 'no_face' | 'multiple_faces' | 'quality' | 'ok' | 'collecting' | 'identified' | 'rejected' | 'busy' | 'throttled' | 'error' | 'complete' | 'saved' | 'restarted'
   frame?: number
   face?: { box: [number, number, number, number]; landmarks: [number, number][]; score: number } | null
   faces?: number
+  others?: OtherFace[]
   issues?: string[]
   guidance?: string
   quality?: number | null
   timings_ms?: Record<string, number>
-  liveness?: { frames: number; needed?: number; score: number; passed: boolean }
+  liveness?: { frames: number; needed?: number; score: number; passed: boolean; low?: boolean }
   challenge?: { name: string | null; state: 'pending' | 'turned' | 'passed' | 'failed'; text: string }
   yaw?: number
   pitch?: number
@@ -230,7 +254,7 @@ export interface FrameFeedback {
   employee?: { id: string; name: string; code: string; department: string | null }
   token?: string
   today?: { first_in: string | null; last_out: string | null; worked_minutes: number } | null
-  next?: { next: AttendanceAction; last_event: { id: string; action: AttendanceAction; occurred_at: string; method: AttendanceMethod } | null; attendance_date: string }
+  next?: NextAction
   match_score?: number | null
   liveness_score?: number
   attempt_id?: string
@@ -240,5 +264,6 @@ export interface FrameFeedback {
   enrolment_id?: string
   template_count?: number
   quality_score?: number
+  liveness_low?: boolean
   detail?: Record<string, unknown>
 }

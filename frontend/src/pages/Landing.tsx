@@ -43,7 +43,7 @@ export default function Landing() {
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link to="/kiosk"><Button size="lg" variant="accent" rightIcon={<ArrowRight className="size-4" />}>Check in with your face</Button></Link>
-              <Link to={portal}><Button size="lg" variant="outline" className="border-line-2 bg-transparent text-ink hover:bg-surface-3">Administrator sign-in</Button></Link>
+              <Link to={portal}><Button size="lg" variant="outline" className="border-line-2 bg-transparent text-ink hover:bg-surface-3">{user ? 'Open my dashboard' : 'Sign in'}</Button></Link>
             </div>
             <dl className="mt-10 grid max-w-md grid-cols-3 gap-4 text-sm">
               {[['~50 ms', 'per frame on CPU'], ['300+', 'employees per site'], ['AES-256', 'template encryption']].map(([v, l]) => (

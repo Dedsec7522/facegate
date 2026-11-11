@@ -5,6 +5,7 @@ waits for the terminal message (identified / rejected). Reports latency percenti
 per-frame round-trips and end-to-end session time, plus server throughput.
 
     .venv/Scripts/python benchmarks/load_test.py --clients 300 --ramp 5 --frames 10 --base http://127.0.0.1:8000
+    .venv/Scripts/python benchmarks/load_test.py --clients 500 --concurrency 500 --face path/to/any_face.jpg   # everyone at once
 """
 from __future__ import annotations
 
@@ -22,10 +23,10 @@ import websockets
 DATA = Path(__file__).resolve().parents[1] / "tests" / "data"
 
 
-def load_frames(n: int) -> list[bytes]:
-    files = sorted(DATA.glob("synth_face_*.jpg"))
-    if not files:
-        raise SystemExit("no synthetic faces in tests/data")
+def load_frames(n: int, face: str | None = None) -> list[bytes]:
+    files = [Path(face)] if face else sorted(DATA.glob("synth_face_*.jpg"))
+    if not files or not files[0].exists():
+        raise SystemExit("no face image: pass --face <jpg> or put synth_face_*.jpg in tests/data")
     img = cv2.resize(cv2.imread(str(files[0])), (640, 640))
     out = []
     for i in range(n):
@@ -35,13 +36,13 @@ def load_frames(n: int) -> list[bytes]:
     return out
 
 
-async def one_client(idx: int, base: str, frames: list[bytes], results: dict, delay: float, gate: asyncio.Semaphore) -> None:
+async def one_client(idx: int, base: str, frames: list[bytes], results: dict, delay: float, gate: asyncio.Semaphore, http: httpx.AsyncClient) -> None:
     await asyncio.sleep(delay)
     async with gate:
-        await _run_client(idx, base, frames, results)
+        await _run_client(idx, base, frames, results, http)
 
 
-async def _run_client(idx: int, base: str, frames: list[bytes], results: dict) -> None:
+async def _run_client(idx: int, base: str, frames: list[bytes], results: dict, http: httpx.AsyncClient) -> None:
     t0 = time.perf_counter()
     frame_rtts: list[float] = []
     busy = 0
@@ -50,10 +51,11 @@ async def _run_client(idx: int, base: str, frames: list[bytes], results: dict) -
     try:
         # Each virtual client presents a distinct source address so per-IP limits behave as in production.
         xff = {"X-Forwarded-For": f"10.{(idx // 65025) % 256}.{(idx // 255) % 255}.{idx % 255 + 1}"}
-        async with httpx.AsyncClient(base_url=base, timeout=30, headers=xff) as c:
-            r = await c.post("/api/v1/verify/sessions")
-            r.raise_for_status()
-            s = r.json()
+        # One shared keep-alive client: on Windows a fresh TCP connection per request costs ~200 ms and serialises,
+        # which would measure the load generator rather than the server.
+        r = await http.post("/api/v1/verify/sessions", headers=xff)
+        r.raise_for_status()
+        s = r.json()
         ws_base = base.replace("http", "ws", 1)
         async with websockets.connect(f"{ws_base}/api/v1/verify/stream/{s['session_id']}", max_size=4 * 1024 * 1024) as ws:
             await ws.send(json.dumps({"nonce": s["nonce"]}))
@@ -87,11 +89,12 @@ def pct(xs: list[float], p: float) -> float:
 
 
 async def main(a: argparse.Namespace) -> None:
-    frames = load_frames(a.frames)
+    frames = load_frames(a.frames, a.face)
     results: dict[int, dict] = {}
     t0 = time.perf_counter()
     gate = asyncio.Semaphore(a.concurrency)
-    await asyncio.gather(*(one_client(i, a.base, frames, results, (i / a.clients) * a.ramp, gate) for i in range(a.clients)))
+    async with httpx.AsyncClient(base_url=a.base, timeout=30, limits=httpx.Limits(max_connections=a.concurrency + 10)) as http:
+        await asyncio.gather(*(one_client(i, a.base, frames, results, (i / a.clients) * a.ramp, gate, http) for i in range(a.clients)))
     wall = time.perf_counter() - t0
     totals = [r["total_ms"] for r in results.values()]
     rtts = [x for r in results.values() for x in r["frame_rtts"]]
@@ -112,4 +115,5 @@ if __name__ == "__main__":
     p.add_argument("--frames", type=int, default=10)
     p.add_argument("--concurrency", type=int, default=10, help="max simultaneous sessions (number of kiosks)")
     p.add_argument("--base", default="http://127.0.0.1:8000")
+    p.add_argument("--face", default=None, help="face JPEG to stream (default: first tests/data/synth_face_*.jpg)")
     asyncio.run(main(p.parse_args()))

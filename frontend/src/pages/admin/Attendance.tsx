@@ -197,19 +197,24 @@ function CorrectionsTab() {
   const qc = useQueryClient()
   const list = useQuery({ queryKey: ['corrections'], queryFn: () => api.get<Correction[]>('/attendance/corrections', { limit: 200 }) })
   const [open, setOpen] = useState(false)
-  const [kind, setKind] = useState<'add' | 'void' | 'adjust'>('add')
+  const [kind, setKind] = useState<'add' | 'void' | 'adjust' | 'leave' | 'clear_leave'>('add')
+  const needsEvent = kind === 'void' || kind === 'adjust'
+  const isLeave = kind === 'leave' || kind === 'clear_leave'
   const [employeeId, setEmployeeId] = useState('')
   const [eventId, setEventId] = useState('')
   const [action, setAction] = useState('check_in')
   const [when, setWhen] = useState('')
   const [reason, setReason] = useState('')
-  const events = useQuery({ queryKey: ['events', 'for-correction', employeeId], queryFn: () => api.get<Page<AttendanceEvent>>('/attendance/events', { employee_id: employeeId, page_size: 50 }), enabled: !!employeeId && kind !== 'add' })
+  const events = useQuery({ queryKey: ['events', 'for-correction', employeeId], queryFn: () => api.get<Page<AttendanceEvent>>('/attendance/events', { employee_id: employeeId, page_size: 50 }), enabled: !!employeeId && needsEvent })
   const create = useMutation({
-    mutationFn: () => api.post<Correction>('/attendance/corrections', { employee_id: employeeId, kind, reason, event_id: kind === 'add' ? undefined : eventId, action: kind === 'void' ? undefined : action, occurred_at: kind === 'void' || !when ? undefined : new Date(when).toISOString() }),
+    // Leave takes a date: send noon local time so the organisation's attendance day is the one picked.
+    mutationFn: () => api.post<Correction>('/attendance/corrections', { employee_id: employeeId, kind, reason, event_id: needsEvent ? eventId : undefined, action: kind === 'add' || kind === 'adjust' ? action : undefined,
+      occurred_at: kind === 'void' || !when ? undefined : isLeave ? new Date(`${when}T12:00:00`).toISOString() : new Date(when).toISOString() }),
     onSuccess: () => { toast.success('Correction recorded', 'The daily summary has been recomputed and the change is audited.'); setOpen(false); setReason(''); setEventId(''); setWhen(''); void qc.invalidateQueries({ queryKey: ['corrections'] }); void qc.invalidateQueries({ queryKey: ['days'] }); void qc.invalidateQueries({ queryKey: ['events'] }); void qc.invalidateQueries({ queryKey: ['today'] }) },
     onError: (e: ApiError) => toast.error('Correction rejected', e.message),
   })
-  const valid = employeeId && reason.trim().length >= 5 && (kind === 'add' ? !!when : !!eventId)
+  const valid = employeeId && reason.trim().length >= 5 && (kind === 'add' || isLeave ? !!when : !!eventId)
+  const fmtChange = (x: Record<string, unknown> | null | undefined) => !x ? '—' : 'status' in x ? `status: ${String(x.status)}` : `${String(x.action)} ${fmtDateTime(String(x.occurred_at))}`
   return (
     <Card>
       <div className="flex items-center justify-between border-b border-line p-4">
@@ -223,10 +228,10 @@ function CorrectionsTab() {
             {list.data.map((c) => (
               <tr key={c.id}>
                 <Td className="tabular whitespace-nowrap">{fmtDateTime(c.created_at)}</Td>
-                <Td><Badge tone={c.kind === 'void' ? 'danger' : c.kind === 'add' ? 'success' : 'warning'}>{c.kind}</Badge></Td>
+                <Td><Badge tone={c.kind === 'void' ? 'danger' : c.kind === 'add' ? 'success' : c.kind === 'leave' ? 'info' : 'warning'}>{c.kind.replace('_', ' ')}</Badge></Td>
                 <Td className="whitespace-nowrap">{fmtDate(c.attendance_date)}</Td>
-                <Td className="text-xs text-ink-2">{c.before ? `${String(c.before.action)} ${fmtDateTime(String(c.before.occurred_at))}` : '—'}</Td>
-                <Td className="text-xs text-ink-2">{c.after ? `${String(c.after.action)} ${fmtDateTime(String(c.after.occurred_at))}` : '—'}</Td>
+                <Td className="text-xs text-ink-2">{fmtChange(c.before)}</Td>
+                <Td className="text-xs text-ink-2">{fmtChange(c.after)}</Td>
                 <Td className="max-w-xs text-ink-2">{c.reason}</Td>
               </tr>
             ))}
@@ -236,16 +241,18 @@ function CorrectionsTab() {
       <Dialog open={open} onClose={() => setOpen(false)} title="New attendance correction" description="Choose the employee, what to change, and give an auditable reason." footer={<><Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button><Button onClick={() => create.mutate()} disabled={!valid} loading={create.isPending}>Record correction</Button></>}>
         <div className="space-y-4">
           <EmployeePicker label="Employee" value={employeeId} onChange={(id) => { setEmployeeId(id); setEventId('') }} required />
-          <Select label="Kind" value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}>
+          <Select label="Kind" value={kind} onChange={(e) => { setKind(e.target.value as typeof kind); setWhen('') }}>
             <option value="add">Add a missing event</option><option value="void">Void an incorrect event</option><option value="adjust">Adjust an event's time</option>
+            <option value="leave">Mark a day as leave</option><option value="clear_leave">Clear a leave day</option>
           </Select>
-          {kind !== 'add' && (
+          {isLeave && <Input label="Day" type="date" required value={when} onChange={(e) => setWhen(e.target.value)} hint="The day must have no attendance events. Shown in yellow on the employee's calendar." />}
+          {needsEvent && (
             <Select label="Event" required value={eventId} onChange={(e) => setEventId(e.target.value)} hint={!employeeId ? 'Select an employee first' : undefined}>
               <option value="">Select the event</option>
               {events.data?.items.map((ev) => <option key={ev.id} value={ev.id}>{fmtDateTime(ev.occurred_at)} · {ev.action.replace('_', ' ')} · {ev.method}</option>)}
             </Select>
           )}
-          {kind !== 'void' && (
+          {(kind === 'add' || kind === 'adjust') && (
             <div className="grid gap-4 sm:grid-cols-2">
               <Select label="Action" value={action} onChange={(e) => setAction(e.target.value)}><option value="check_in">Check in</option><option value="check_out">Check out</option></Select>
               <Input label="Date & time" type="datetime-local" required={kind === 'add'} value={when} onChange={(e) => setWhen(e.target.value)} />

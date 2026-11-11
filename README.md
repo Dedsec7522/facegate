@@ -15,7 +15,22 @@ Documentation: [reference analysis](docs/01-reference-analysis.md) · [architect
 
 ## 1. Local development (Windows / macOS / Linux)
 
-Prerequisites: Python 3.12+, Node 20+, PostgreSQL 16 (Docker or a native install), a webcam. On Windows, `onnxruntime` and `openvino` need the Microsoft VC++ redistributable.
+### Prerequisites
+
+| Need | Why | Windows (winget) | macOS / Linux |
+|---|---|---|---|
+| Git | clone / push | `winget install --id Git.Git -e` | Xcode CLT / `apt install git` |
+| Python 3.12+ | backend, tools, tests | `winget install --id Python.Python.3.12 -e` | `brew install python@3.12` / `apt install python3.12-venv` |
+| Node 20+ (22/26 LTS fine) | frontend (Vite) | `winget install --id OpenJS.NodeJS.LTS -e` | `brew install node` / nodesource |
+| Docker Desktop (or Postgres 16) | database | Docker Desktop must be **running** | Docker / `brew install postgresql@16` |
+| VC++ redistributable (Windows only) | `onnxruntime`, `openvino` | `winget install --id Microsoft.VCRedist.2015+.x64 -e` | not needed |
+| A webcam | enrolment, kiosk, portal face login | | |
+
+No GPU, no accounts, no API keys: all models are committed in `backend/models/` and everything runs on the CPU.
+
+Windows notes: winget puts Git and Python under `%LOCALAPPDATA%\Programs\…` and Node under `C:\Program Files\nodejs`; a terminal opened *after* installing sees them on PATH, an older shell (including an AI coding session's shell) may not and must use full paths. Run the backend from PowerShell or Git Bash; `.venv\Scripts\python.exe -m …` always works without activating the venv.
+
+### First run
 
 PostgreSQL with Docker:
 
@@ -36,7 +51,8 @@ pip install -r requirements.txt
 cp .env.example .env                                  # defaults work for local dev
 alembic upgrade head
 python tools/seed.py --demo            # creates admin  username: admin  password: Welcome123  (change it after first login)
-uvicorn app.main:app --reload --port 8000
+python tools/seed.py --employee-logins # optional: portal login for every employee (username = employee code, password Welcome123)
+python -m uvicorn app.main:app --reload --reload-dir app --port 8000   # --reload-dir: don't watch .venv
 ```
 
 ```bash
@@ -44,6 +60,12 @@ cd frontend && npm install && npm run dev            # http://localhost:5173 (pr
 ```
 
 Then open http://localhost:5173 → **Administrator sign-in** with username `admin` / password `Welcome123` (or the email `admin@facegate.local`) → *Employees* → pick someone → **Enrol face** (three automatic frontal samples; left/right turns optional) → open the **kiosk** and check in, or create the employee a login and use **Login from Office** in their portal.
+
+To try the employee dashboard: **Sign in** on the landing page, *Employee* tab, with the employee code as username, e.g. `e1001` / `Welcome123` after `seed.py --employee-logins`. In development the sign-in page also shows one-click test accounts (served by `GET /api/v1/auth/test-accounts`, which answers only when `ENVIRONMENT=development`).
+
+Set the **organisation time zone** once: *Settings → Attendance rules → Country / region* (e.g. India → `Asia/Kolkata`). Every time in the UI is shown in that zone, whatever the PC's own clock zone is set to; the server stores UTC. Until then the `ORG_TIMEZONE` from `.env` applies.
+
+Checklist for a fresh machine / session: Docker Desktop running → `docker start facegate-pg` (or the `docker run` above) → API on 8000 → `npm run dev` on 5173 → sign in as `admin` / `Welcome123`.
 
 Models: all weights are committed in `backend/models/` — YuNet (`.onnx`), the Intel face-recognition model (`face-reidentification-retail-0095.xml` + `.bin`, OpenVINO IR, SHA-384 checked against the Open Model Zoo), SFace (`.onnx`, fallback) and MiniFASNet (`minifasnet_*.onnx`).
 
@@ -71,8 +93,8 @@ docker compose exec api python tools/seed.py --admin-username admin --admin-emai
 
 | Role | Where | What |
 |---|---|---|
-| Employee | `/kiosk` | Start verification → follow the head-turn prompt → choose Check in / Check out. Optional admin-enabled PIN fallback. |
-| Employee | `/portal` | **Login from Office / Logout from Office** with a face check bound to the signed-in account (1:1 — only your own enrolled face can log your account in or out), today's times, history and event timeline (needs an account created by an admin). |
+| Employee | `/kiosk` | Start verification → identified in about a second → the one action the engine allows (Login or Logout) is recorded automatically after a 3 s countdown (tap to do it now, or *Not you? Cancel*). Bystanders in the frame are labelled with name and signed-in state but never recorded; a partially covered face (mask, scarf, cap over the eyes) is refused with an error. Optional admin-enabled PIN fallback. |
+| Employee | `/portal` | **Login from Office / Logout from Office** with a face check bound to the signed-in account (1:1 — only your own enrolled face can log your account in or out), today's times, a month **calendar** (green present, red absent, yellow leave), insights and the event timeline (needs an account: `seed.py --employee-logins` or *Employees → Create account*). |
 | Admin / HR | `/admin` | Dashboard, employees & departments, enrolment, live attendance board, corrections, reports & exports, settings, MFA, users, audit log. |
 
 ## 4. Tests and benchmarks
@@ -82,6 +104,7 @@ cd backend && .venv/Scripts/python -m pytest -q                 # 22 tests: engi
 # vision + e2e tests need face images in backend/tests/data/synth_face_*.jpg (git-ignored; ≥ 3 different people, sharp at 640 px)
 .venv/Scripts/python benchmarks/latency.py                       # per-stage latency on this machine
 .venv/Scripts/python benchmarks/load_test.py --clients 300 --concurrency 10   # 300 sessions through 10 kiosks
+.venv/Scripts/python benchmarks/load_test.py --clients 500 --concurrency 500 --face any_face.jpg --base http://127.0.0.1:8001  # see "Capacity"
 cd ../frontend && npm run build                                   # tsc + Vite production build
 ```
 
@@ -107,6 +130,9 @@ All settings are environment variables (see `backend/.env.example`). Attendance 
 | `EMBED_MAX_FRAMES` | 6 | a verification session stops computing embeddings once it holds this many frontal ones |
 | `KEEP_ENROL_THUMBNAIL` | true | keep one 112 px aligned thumbnail per enrolment for admins |
 | `VERIFY_SESSIONS_PER_MINUTE` | 120 | per-IP kiosk session limit |
+| `RELOGIN_COOLDOWN_HOURS` | 10 | a login is refused until this long after the employee's last logout (0 disables; also in *Settings*) |
+| `ORG_TIMEZONE` | Europe/London | default organisation zone until an admin picks a region in *Settings* |
+| `LOGIN_PER_MINUTE_PER_IP` | 60 | password sign-ins per minute from one address (an office NAT is one address); accounts still lock after 5 failed attempts |
 
 ## 6. Repository layout
 

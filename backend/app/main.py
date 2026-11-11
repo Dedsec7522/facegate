@@ -70,7 +70,18 @@ async def unhandled(request: Request, exc: Exception):
 @app.get("/api/health")
 async def health():
     pipe = get_pipeline()
-    return {"status": "ok", "index_templates": pipe.index.size, "environment": settings.environment}
+    # The organisation time zone is public (not sensitive) so the anonymous kiosk can display organisation wall-clock
+    # times whatever the device's own clock zone is set to.
+    from app.db.base import SessionLocal
+    from app.services.org_settings import get_org_settings
+
+    tz = settings.org_timezone
+    try:
+        async with SessionLocal() as db:
+            tz = (await get_org_settings(db)).timezone
+    except Exception:  # noqa: BLE001 - health must answer even if the DB is down; the UI then uses the configured default
+        pass
+    return {"status": "ok", "index_templates": pipe.index.size, "environment": settings.environment, "timezone": tz}
 
 
 app.include_router(api_router, prefix=settings.api_prefix)

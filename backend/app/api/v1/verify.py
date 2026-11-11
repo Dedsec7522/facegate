@@ -14,6 +14,7 @@ from app.core.rate_limit import client_ip, limit, verify_session_limiter
 from app.core.security import create_access_token, create_verification_token, decode_token
 from app.db.base import SessionLocal, get_db
 from app.db.models import AttendanceDay, Employee, EmployeeStatus, Role, UserAccount, VerificationAttempt, VerificationOutcome
+from app.services.attendance import next_expected_action
 from app.services.enrolment import EnrolmentError, add_adaptive_template, commit_enrolment
 from app.services.org_settings import get_org_settings
 from app.services.verification import manager
@@ -78,6 +79,34 @@ async def _record_attempt(result: dict, s, purpose: str) -> str | None:
         return att.id
 
 
+OTHERS_CACHE_SECONDS = 5.0
+
+
+async def _enrich_others(s, resp: dict) -> None:
+    """Label the bystanders the pipeline identified with their name and whether they are signed in right now.
+    Looked up once per employee per session (refreshed every few seconds), so it costs nothing on most frames."""
+    others = resp.get("others") or []
+    if not others:
+        return
+    now = time.monotonic()
+    missing = {o["employee_id"] for o in others
+               if o.get("employee_id") and (o["employee_id"] not in s.others_cache or now - s.others_cache[o["employee_id"]][0] > OTHERS_CACHE_SECONDS)}
+    if missing:
+        async with SessionLocal() as db:
+            org = await get_org_settings(db)
+            for eid in missing:
+                emp = await db.get(Employee, eid)
+                info = None
+                if emp is not None:
+                    nxt = await next_expected_action(db, eid, org)
+                    info = {"name": emp.full_name, "code": emp.employee_code, "signed_in": nxt["next"] == "check_out",
+                            "since": nxt["last_event"]["occurred_at"] if nxt["last_event"] else None}
+                s.others_cache[eid] = (now, info)
+    for o in others:
+        info = s.others_cache.get(o.get("employee_id") or "", (0.0, None))[1]
+        o.update(info or {"name": None, "code": None, "signed_in": None, "since": None})
+
+
 @router.websocket("/stream/{session_id}")
 async def stream(ws: WebSocket, session_id: str):
     s = manager.get(session_id)
@@ -119,13 +148,12 @@ async def stream(ws: WebSocket, session_id: str):
                 await ws.send_json({"state": "error", "message": "Bad frame"})
                 continue
             resp = await manager.process_attendance_frame(s, bgr)
+            await _enrich_others(s, resp)
             if s.done and s.result:
                 att_id = await _record_attempt(s.result, s, "attendance")
                 if s.result.get("state") == "identified":
                     async with SessionLocal() as db:
                         emp = await db.get(Employee, s.result["employee_id"])
-                        from app.services.attendance import next_expected_action
-
                         org = await get_org_settings(db)
                         nxt = await next_expected_action(db, emp.id, org)
                         day_row = (await db.execute(select(AttendanceDay).where(AttendanceDay.employee_id == emp.id, AttendanceDay.attendance_date == date.fromisoformat(nxt["attendance_date"])))).scalar_one_or_none()
@@ -177,11 +205,12 @@ async def enrol_stream(ws: WebSocket, session_id: str):
                         actor = await db.get(UserAccount, payload["sub"])
                         try:
                             enrol = await commit_enrolment(db, s, employee=emp, created_by=actor.id if actor else None, notes=cmd.get("notes"))
+                            liveness_low = (enrol.liveness_score or 0.0) < s.pad_threshold  # saved on the admin's in-person confirmation
                             await audit(db, "enrolment.create", actor=actor, target_type="employee", target_id=emp.id,
-                                        detail={"enrolment_id": enrol.id, "templates": enrol.template_count, "quality": enrol.quality_score, "liveness": enrol.liveness_score})
+                                        detail={"enrolment_id": enrol.id, "templates": enrol.template_count, "quality": enrol.quality_score, "liveness": enrol.liveness_score, "liveness_low": liveness_low})
                             await db.commit()
                             await ws.send_json({"state": "saved", "enrolment_id": enrol.id, "template_count": enrol.template_count,
-                                                "quality_score": round(enrol.quality_score or 0, 3), "liveness_score": round(enrol.liveness_score or 0, 3)})
+                                                "quality_score": round(enrol.quality_score or 0, 3), "liveness_score": round(enrol.liveness_score or 0, 3), "liveness_low": liveness_low})
                         except EnrolmentError as e:
                             await db.rollback()
                             await ws.send_json({"state": "error", "reason": e.code, "message": e.message, "detail": e.detail})
