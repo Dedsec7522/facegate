@@ -134,7 +134,18 @@ All settings are environment variables (see `backend/.env.example`). Attendance 
 | `ORG_TIMEZONE` | Europe/London | default organisation zone until an admin picks a region in *Settings* |
 | `LOGIN_PER_MINUTE_PER_IP` | 60 | password sign-ins per minute from one address (an office NAT is one address); accounts still lock after 5 failed attempts |
 
-## 6. Repository layout
+## 6. Capacity (measured 11 Nov 2026, one Windows laptop: 8 logical cores, Docker Desktop Postgres, load generator on the same machine)
+
+| Scenario | Result |
+|---|---|
+| 500 password sign-ins fired at once | 500 / 500 succeed, ~16 logins/s sustained, last one answered after 31 s; 100 at once finish in 6 s |
+| 500 face check-ins through 10 kiosks | 500 / 500 identified, 2.2 s per person (p95 3.2 s), all done in 115 s |
+| 500 face check-ins through 50 kiosks | 500 / 500 identified, 13.6 s per person (queueing), 17 frames/s |
+| 500 face streams truly simultaneous (500 kiosks) | exceeds one node: ~80 % identified, the rest time out in the queue |
+
+The vision pipeline tops out at ~35 frames/s on this CPU (2–4 threads); ~5 frames identify a person, so one node handles roughly 6–7 check-ins per second at best. 400–500 people arriving through a handful of kiosks over a few minutes is comfortable; 500 kiosks streaming at the same instant is not, and needs more nodes behind a sticky-session load balancer (§2). Measure on the production host with `benchmarks/load_test.py` (use `--face` with any face photo) against an instance started **without** `--reload` (see CLAUDE.md gotchas for the Windows socket cap and the load-generator pitfall).
+
+## 7. Repository layout
 
 ```
 backend/   app/{api,core,db,schemas,services,vision}  alembic/  tests/  benchmarks/  tools/  models/

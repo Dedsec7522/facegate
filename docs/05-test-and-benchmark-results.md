@@ -125,3 +125,24 @@ At equal false-accept rate the Intel model rejects roughly 17–35 % fewer genui
 Other throughput changes: `INFERENCE_WORKERS=0` → one worker per physical core (8 instead of 4 here), `cv2.setNumThreads(1)` so workers don't oversubscribe the CPU, and a verification session stops embedding after `EMBED_MAX_FRAMES=6`.
 
 Tests: 21 / 22 pass with LFW photos as `tests/data` faces; the remaining failure is the e2e enrolment's liveness gate: LFW photos are photographs of photographs and score a passive-PAD median of ~0.42, below the 0.45 default (and the 0.80 in `.env.example`). With `PAD_LIVE_THRESHOLD=0.3` for the run, all e2e steps pass with the new model (enrol → duplicate guard → identified with score > 0.8 → single-use token → unknown face rejected). This is a property of the test images, not of the recognition change. **Pending:** the 300-client load test (§4) must be re-run on an idle host; the run on this machine was postponed because an unrelated process held the CPU at 100 %.
+
+
+## 8. Load test, 11 November 2026 (Windows laptop)
+
+Host: Windows 11, 8 logical cores, PostgreSQL 16 in Docker Desktop, API started without `--reload` (Proactor loop), load generator on the same machine (so these are pessimistic). 15 enrolled templates in the index; the streamed face was a real webcam frame.
+
+| Run | Outcome | Throughput | Per-person |
+|---|---|---|---|
+| 500 password logins, all at once | 500 ok, 0 errors | 16.0 logins/s | p50 24 s queueing, max 31 s |
+| 100 password logins, all at once | 100 ok | 16.4 logins/s | p50 5.2 s |
+| 500 verifications, 10 kiosks | 500 identified | 21.7 frames/s | p50 2.2 s, p95 3.2 s, RTT p50 288 ms |
+| 500 verifications, 50 kiosks | 500 identified | 17.2 frames/s | p50 13.6 s, p95 20.7 s |
+| 500 verifications, 500 kiosks at once (before the fixes below) | 402 identified, 97 timed out (60 s TTL), 1 read error | 21.6 frames/s | p50 82 s |
+
+Pipeline ceiling (`analyse` on one 640×640 frame, thread pool): 1 thread 19 frames/s, 2 threads 33, 4 threads 35, 8 threads 29.
+
+What the run found and what changed:
+
+- The first login storm crashed the **dev** server: with `--reload` uvicorn on Windows uses the select()-based loop, capped at 512 sockets (`ValueError: too many file descriptors in select()`). Not a production issue (Linux/epoll); load-test a `--reload`-free instance.
+- Password verification ran Argon2id (64 MiB, 3 passes) synchronously on the event loop and that cost barely parallelises (12.8 verifies/s on 8 threads). Now OWASP cost (19 MiB, 2 passes, 1 lane: ~70 verifies/s), run via `asyncio.to_thread`, old hashes re-hashed on the next login. The DB pool grew from 10+20 to 20+40 connections (a login holds its connection while hashing) and the per-IP login budget became a setting (`LOGIN_PER_MINUTE_PER_IP`, default 60) because an office NAT is one address.
+- The load generator itself was the first bottleneck: a new `httpx.AsyncClient` per request on Windows serialises at ~4 req/s. `load_test.py` and the login probe now share one keep-alive client (WebSocket connects were fine: 14 ms).
