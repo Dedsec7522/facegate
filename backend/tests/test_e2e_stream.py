@@ -22,6 +22,7 @@ from app.db.models import AttendanceEvent, Employee, VerificationAttempt
 from app.services.enrolment import EnrolmentError, commit_enrolment
 from app.services.verification import ENROL_POSES, Session, SessionManager, manager
 from app.vision.pipeline import get_pipeline
+from app.vision.quality import GUIDANCE
 from tests.conftest import DATA
 
 FILES = sorted(glob.glob(str(DATA / "synth_face_*.jpg")))
@@ -121,7 +122,7 @@ async def test_enrol_identify_reject_and_record(admin_client: AsyncClient):
             blank = cv2.imencode(".jpg", np.full((480, 640, 3), 120, np.uint8))[1].tobytes()
             ws.send_bytes(blank)
             msg = ws.receive_json()
-            assert msg["state"] == "no_face" and "Position your face" in msg["guidance"]
+            assert msg["state"] == "no_face" and msg["guidance"] == GUIDANCE["no_face"]
 
     async with SessionLocal() as db:
         attempts = (await db.execute(select(VerificationAttempt))).scalars().all()

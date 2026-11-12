@@ -9,5 +9,6 @@ dist/
 backend/tests/data/*.jpg
 backend/models/*.pth
 deploy/certs/
+deploy/backups/
 .pytest_cache/
 .env.local

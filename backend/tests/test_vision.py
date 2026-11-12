@@ -35,8 +35,10 @@ def faces(pipe):
 
 def test_no_face_and_multiple_faces(pipe, faces):
     assert pipe.analyse(np.full((480, 640, 3), 120, np.uint8)).state == "no_face"
-    imgs = [cv2.resize(v[0], (400, 400)) for v in list(faces.values())[:2]]
-    assert pipe.analyse(np.concatenate(imgs, axis=1)).state == "multiple_faces"
+    # Two equally close faces (same size) must be refused; a clearly smaller second face is a bystander
+    # (PRIMARY_FACE_MARGIN), so build the pair from one image to make the sizes equal whatever the test data.
+    img = cv2.resize(next(iter(faces.values()))[0], (400, 400))
+    assert pipe.analyse(np.concatenate([img, img], axis=1)).state == "multiple_faces"
 
 
 def test_quality_gates(pipe, faces):

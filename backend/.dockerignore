@@ -1,0 +1,12 @@
+# Keep local environments, secrets and test data out of the API image
+.venv/
+.venv-export/
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+.pytest_cache/
+tests/data/
+*.db
+*.log

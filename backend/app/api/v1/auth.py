@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 import qrcode
 import qrcode.image.svg
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -109,8 +110,10 @@ async def refresh(request: Request, response: Response, db: AsyncSession = Depen
     sess = (await db.execute(select(RefreshSession).where(RefreshSession.token_hash == hash_refresh(raw)))).scalar_one_or_none()
     now = datetime.now(timezone.utc)
     if sess is None or sess.revoked_at or sess.expires_at < now:
-        _clear_cookies(response)
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Session expired")
+        # A raised HTTPException would drop cookie changes made on `response`; return the 401 with the deletions.
+        out = JSONResponse({"detail": "Session expired"}, status_code=status.HTTP_401_UNAUTHORIZED)
+        _clear_cookies(out)
+        return out
     user = await db.get(UserAccount, sess.user_id)
     if not user or not user.is_active:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Account unavailable")
@@ -131,8 +134,11 @@ async def logout(request: Request, response: Response, db: AsyncSession = Depend
         if sess:
             sess.revoked_at = datetime.now(timezone.utc)
             await db.commit()
-    _clear_cookies(response)
-    return Response(status_code=204)
+    # Clear the cookies on the response that is actually returned: FastAPI discards the injected `response` when the
+    # endpoint returns its own Response object, which left the access cookie valid after logout.
+    out = Response(status_code=204)
+    _clear_cookies(out)
+    return out
 
 
 @router.get("/test-accounts")

@@ -1,8 +1,9 @@
 # FaceGate — self-hosted deployment (Ubuntu + Docker Compose)
 #   cp .env.example .env && edit secrets
-#   docker compose up -d --build
-#   docker compose exec api alembic upgrade head
-#   docker compose exec api python tools/seed.py --admin-email you@company.com --admin-password '...'
+#   docker compose build
+#   docker compose run --rm --no-deps api alembic upgrade head      (before first start: the API needs the schema)
+#   docker compose run --rm --no-deps api python tools/seed.py --admin-email you@company.com --admin-password '...'
+#   docker compose up -d
 name: facegate
 
 services:

@@ -43,7 +43,7 @@ backend/
   models/                   committed weights: YuNet (MIT), face-reidentification-retail-0095 .xml/.bin (Apache-2.0),
                             SFace (Apache-2.0, fallback), MiniFASNet V1SE + V2 (Apache-2.0)
   tools/seed.py             admin/demo seeding;  tools/export_pad_onnx.py  one-off torch→ONNX export
-  tests/                    pytest (SQLite via aiosqlite); benchmarks/ latency + 300-client load test
+  tests/                    pytest (SQLite via aiosqlite); benchmarks/ latency, 300-client load test, locustfile.py (mixed Locust test)
 frontend/
   src/lib/                  api.ts (fetch wrapper, cookie auth), auth.tsx, theme.tsx, motion.ts, format.ts, types.ts
   src/components/           ui/ (Button, Card, Badge, Dialog…), layout/ (AdminShell, PortalShell, ThemeToggle), camera/
@@ -77,7 +77,8 @@ docs/01–07                  architecture, design system, security, test/benchm
 - **Throughput knobs**: `INFERENCE_WORKERS=0` → one worker per physical core; `cv2.setNumThreads(1)`
   (parallelism comes from the pool); two-stage detection — faces found on a `DETECT_MAX_SIDE`=320 copy, then
   landmarks re-detected on a full-resolution crop (coarse landmarks gave 4–11° yaw bias and worse alignment);
-  a session stops embedding after `EMBED_MAX_FRAMES`=6.
+  every frontal frame of a session is embedded (no cap: the consistency check must cover the frames that
+  supply the liveness evidence, or a photo could provide the identity and another live face the liveness).
 - **Templates** are AES-256-GCM encrypted with `TEMPLATE_KEY` (AAD = template id). Rotating the
   key means re-enrolling everyone — by design.
 - **Kiosk hand-off to the dashboard**: the kiosk posts `open_portal: true` with the attendance event. If the employee has an
@@ -89,7 +90,8 @@ docs/01–07                  architecture, design system, security, test/benchm
   from a per-session cache (`_enrich_others`). Only a second face within `PRIMARY_FACE_MARGIN` (0.85) of the subject's
   size refuses the frame (`multiple_faces`: "step closer"). Bystanders are never checked in.
 - **Partial covering** is a colour heuristic, not a trained model (`quality.occlusion`): nose + lip patches not
-  skin-toned while a forehead/bridge/temple patch is → `covered`; both eye patches far darker than it → `eyes_covered`;
+  skin-toned while a forehead/bridge/temple patch is → `covered`; both eye patches far darker than it AND flat (std < 22: a real eye keeps sclera/iris contrast) → `eyes_covered`
+  (LFW: 1.1 % false flags vs 8.9 % on darkness alone; 97 % of drawn sunglasses caught);
   silent when no reference patch is skin-toned. `FrameAlerts` renders it as an error in kiosk, portal and enrolment.
 - **Time zone**: the organisation zone (Settings → Attendance rules, a country/region picker in `RegionPicker.tsx`
   over the offline table `lib/regions.ts`; no IP geolocation) is served publicly by `/api/health` and set into
@@ -118,7 +120,7 @@ Test accounts: `admin` / `Welcome123`; employees = lower-cased employee code / `
 
 ```bash
 # backend (Python 3.12+; a .venv already exists on the dev machine)
-cd backend && .venv/Scripts/python -m pytest -q          # must stay green (22 tests)
+cd backend && .venv/Scripts/python -m pytest -q          # must stay green (27 tests)
 .venv/Scripts/python -m uvicorn app.main:app --reload --reload-dir app --port 8000  # some dev machines use 8001 (frontend/.env.local)
 # frontend (Node 20+)
 cd frontend && npm run dev                                 # Vite on 5173, proxies /api → FACEGATE_API_URL or :8000
@@ -157,6 +159,10 @@ npm run build
   `asyncio.to_thread` so it never blocks the event loop.
 - Benchmark on an otherwise idle CPU; background load skews every stage.
 - `zoneinfo` on Windows needs the `tzdata` package (already in requirements).
+- **Client IP**: `client_ip` returns `request.client.host` only — never parse `X-Forwarded-For` in the app (the first entry is
+  client-chosen and bypassed every per-IP limit). Uvicorn resolves it from trusted proxies (`FORWARDED_ALLOW_IPS`, default
+  127.0.0.1); nginx must *overwrite* it (`$remote_addr`), not append, because the API runs with `--forwarded-allow-ips '*'`.
+  Load generators on localhost may still send a distinct `X-Forwarded-For` per simulated device (`benchmarks/locustfile.py`).
 - SFace's ONNX graph has a fixed batch of 1 — flip test-time augmentation is two runs, not a batch.
 - Async SQLAlchemy: never touch lazy relationships after the session's greenlet context; use bulk
   deletes (see `purge_biometrics`).

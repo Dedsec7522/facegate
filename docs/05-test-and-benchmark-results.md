@@ -122,7 +122,7 @@ At equal false-accept rate the Intel model rejects roughly 17–35 % fewer genui
 | Previous: SFace + flip on ORT, detection at full resolution | 121.6 ms | 20.7 ms | 171.7 ms | 308.8 ms |
 | New: Intel 0095 on OpenVINO, detection at 320 px | 23.7 ms | 20.8 ms | 18.8 ms | **62.8 ms (≈ 4.9x faster)** |
 
-Other throughput changes: `INFERENCE_WORKERS=0` → one worker per physical core (8 instead of 4 here), `cv2.setNumThreads(1)` so workers don't oversubscribe the CPU, and a verification session stops embedding after `EMBED_MAX_FRAMES=6`.
+Other throughput changes: `INFERENCE_WORKERS=0` → one worker per physical core (8 instead of 4 here), `cv2.setNumThreads(1)` so workers don't oversubscribe the CPU. (An `EMBED_MAX_FRAMES` cap on per-session embeddings was later removed: frames after the cap were not identity-checked, so a photo could supply the identity and a different live face the liveness evidence.)
 
 Tests: 21 / 22 pass with LFW photos as `tests/data` faces; the remaining failure is the e2e enrolment's liveness gate: LFW photos are photographs of photographs and score a passive-PAD median of ~0.42, below the 0.45 default (and the 0.80 in `.env.example`). With `PAD_LIVE_THRESHOLD=0.3` for the run, all e2e steps pass with the new model (enrol → duplicate guard → identified with score > 0.8 → single-use token → unknown face rejected). This is a property of the test images, not of the recognition change. **Pending:** the 300-client load test (§4) must be re-run on an idle host; the run on this machine was postponed because an unrelated process held the CPU at 100 %.
 

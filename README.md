@@ -79,13 +79,15 @@ PAD models: To regenerate them from the vendor checkpoints run `tools/export_pad
 cd deploy
 cp .env.example .env            # set PUBLIC_HOST, POSTGRES_PASSWORD, SECRET_KEY, TEMPLATE_KEY
 mkdir -p certs backups          # put fullchain.pem + privkey.pem in certs/ (Let's Encrypt or your CA)
-docker compose up -d --build
-docker compose exec api alembic upgrade head
-docker compose exec api python tools/seed.py --admin-username admin --admin-email you@company.com --admin-password 'a-strong-password'
+docker compose build
+# migrate + seed in one-off containers first: the API refuses to start against an empty database
+docker compose run --rm --no-deps api alembic upgrade head
+docker compose run --rm --no-deps api python tools/seed.py --admin-username admin --admin-email you@company.com --admin-password 'a-strong-password'
+docker compose up -d
 ```
 
-- Nginx terminates TLS on 443, serves the SPA, proxies `/api` (HTTP + WebSocket) and rate-limits logins.
-- Sizing: `INFERENCE_WORKERS=0` (default) runs one inference worker per physical core. The per-frame cost dropped roughly 5x with the Intel embedder, half-resolution detection and the per-session embedding cap (see `docs/05` §7), so each core handles several times more concurrent verifications than before. A verification session is in-process, so scale beyond one node with a sticky-session load balancer. Re-run `benchmarks/load_test.py` on the production host before sizing for a 300-person peak.
+- Nginx terminates TLS on 443, serves the SPA, proxies `/api` (HTTP + WebSocket) and rate-limits logins. It is the only route to the API and **overwrites** `X-Forwarded-For` with the real client address, so per-IP limits and audit IPs cannot be spoofed with a client-sent header.
+- Sizing: `INFERENCE_WORKERS=0` (default) runs one inference worker per physical core. The per-frame cost dropped roughly 5x with the Intel embedder and half-resolution detection (see `docs/05` §7), so each core handles several times more concurrent verifications than before. A verification session is in-process, so scale beyond one node with a sticky-session load balancer. Re-run `benchmarks/load_test.py` on the production host before sizing for a 300-person peak.
 - Backups: the `backup` service writes a gzipped `pg_dump` nightly to `deploy/backups/` (14-day retention). Restore with `gunzip -c file.sql.gz | docker compose exec -T db psql -U facegate facegate`.
 - Rotate `TEMPLATE_KEY` only with a planned re-enrolment: templates are unrecoverable without it by design.
 
@@ -100,13 +102,31 @@ docker compose exec api python tools/seed.py --admin-username admin --admin-emai
 ## 4. Tests and benchmarks
 
 ```bash
-cd backend && .venv/Scripts/python -m pytest -q                 # 22 tests: engine, vision, API, e2e stream, bound verification
+cd backend && .venv/Scripts/python -m pytest -q                 # 27 tests: engine, vision, API, e2e stream, bound verification, session binding
 # vision + e2e tests need face images in backend/tests/data/synth_face_*.jpg (git-ignored; ≥ 3 different people, sharp at 640 px)
 .venv/Scripts/python benchmarks/latency.py                       # per-stage latency on this machine
 .venv/Scripts/python benchmarks/load_test.py --clients 300 --concurrency 10   # 300 sessions through 10 kiosks
 .venv/Scripts/python benchmarks/load_test.py --clients 500 --concurrency 500 --face any_face.jpg --base http://127.0.0.1:8001  # see "Capacity"
 cd ../frontend && npm run build                                   # tsc + Vite production build
 ```
+
+**Mixed real-time load test with [Locust](https://locust.io)** (MIT; install it in its own venv, it is not an API dependency:
+`pip install locust websocket-client opencv-python-headless`). `benchmarks/locustfile.py` simulates employees signing in and
+using the portal, admins refreshing the console, and people checking in at kiosks (JPEG frames over the WebSocket, full
+detect → liveness → embed → match). Each simulated user gets its own source address, so per-IP limits behave as with real
+devices; run the generator on the API's machine (Uvicorn trusts `X-Forwarded-For` only from 127.0.0.1) or set
+`FORWARDED_ALLOW_IPS` to the generator's address, and target the API on port 8000, not nginx.
+
+```bash
+cd backend
+locust -f benchmarks/locustfile.py --host http://127.0.0.1:8000                     # live web UI on http://localhost:8089
+locust -f benchmarks/locustfile.py --host http://127.0.0.1:8000 --headless -u 400 -r 20 -t 3m --html report.html
+# Windows has no --processes: one master plus N workers (separate shells) for 300+ users
+locust -f benchmarks/locustfile.py --master --headless --expect-workers 4 -u 400 -r 20 -t 3m --host http://127.0.0.1:8000
+locust -f benchmarks/locustfile.py --worker --host http://127.0.0.1:8000
+```
+
+`PORTAL_WEIGHT` / `ADMIN_WEIGHT` / `KIOSK_WEIGHT` (default 6 / 1 / 3) set the mix; `KIOSK_WEIGHT=0` tests the web tier alone.
 
 Results from the development machine are recorded in [docs/05-test-and-benchmark-results.md](docs/05-test-and-benchmark-results.md).
 
@@ -127,12 +147,12 @@ All settings are environment variables (see `backend/.env.example`). Attendance 
 | `INFERENCE_DEVICE` | cpu | CPU only — no GPU is used or required |
 | `INFERENCE_WORKERS` | 0 | bounded CPU inference pool; `0` = one worker per physical core |
 | `DETECT_MAX_SIDE` | 320 | two-stage detection: faces are found on a copy downscaled to this size, then landmarks are refined on a full-resolution crop around each face (coarse landmarks skew head pose and alignment); `0` = single full-resolution pass |
-| `EMBED_MAX_FRAMES` | 6 | a verification session stops computing embeddings once it holds this many frontal ones |
 | `KEEP_ENROL_THUMBNAIL` | true | keep one 112 px aligned thumbnail per enrolment for admins |
 | `VERIFY_SESSIONS_PER_MINUTE` | 120 | per-IP kiosk session limit |
 | `RELOGIN_COOLDOWN_HOURS` | 10 | a login is refused until this long after the employee's last logout (0 disables; also in *Settings*) |
 | `ORG_TIMEZONE` | Europe/London | default organisation zone until an admin picks a region in *Settings* |
 | `LOGIN_PER_MINUTE_PER_IP` | 60 | password sign-ins per minute from one address (an office NAT is one address); accounts still lock after 5 failed attempts |
+| `FORWARDED_ALLOW_IPS` | 127.0.0.1 | Uvicorn setting: proxies whose `X-Forwarded-For` is believed. The app never reads that header itself; Docker uses `*` because nginx overwrites it and is the only way in |
 
 ## 6. Capacity (measured 11 Nov 2026, one Windows laptop: 8 logical cores, Docker Desktop Postgres, load generator on the same machine)
 
@@ -144,6 +164,17 @@ All settings are environment variables (see `backend/.env.example`). Attendance 
 | 500 face streams truly simultaneous (500 kiosks) | exceeds one node: ~80 % identified, the rest time out in the queue |
 
 The vision pipeline tops out at ~35 frames/s on this CPU (2–4 threads); ~5 frames identify a person, so one node handles roughly 6–7 check-ins per second at best. 400–500 people arriving through a handful of kiosks over a few minutes is comfortable; 500 kiosks streaming at the same instant is not, and needs more nodes behind a sticky-session load balancer (§2). Measure on the production host with `benchmarks/load_test.py` (use `--face` with any face photo) against an instance started **without** `--reload` (see CLAUDE.md gotchas for the Windows socket cap and the load-generator pitfall).
+
+**Mixed load with Locust (12 Nov 2026, same laptop, 16 logical CPUs, ~50 % of the CPU taken by an unrelated background process,
+so treat these as a lower bound):**
+
+| Scenario (3 min / 2 min, 20 new users/s) | Result |
+|---|---|
+| 400 users at once: 240 employees on the portal, 40 admins, 120 people checking in at kiosks simultaneously | 28,938 requests, 0.45 % failed (idle keep-alive connections closed by the server, not errors); 280 logins, 0 failed; pages median ~2.5 s; 1,017 face check-ins completed, 0 failed, 9–14 s each; vision pipeline saturated at ~38 analysed frames/s, the rest answered `busy` and retried |
+| 400 web-only users (no kiosks) | ~98 requests/s, pages median 0.6–1 s, logins median 1.1 s, 0.6 % failed (same keep-alive closes) |
+
+120 kiosks streaming at the same moment is ~1,200 frames/s of demand against ~38 frames/s of capacity, so check-ins queue
+but finish; real arrivals are spread out. The face pipeline, not the web tier, is what to size for.
 
 ## 7. Repository layout
 

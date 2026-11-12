@@ -50,7 +50,10 @@ export default function Login() {
     try {
       const u = await login(identifier.trim(), pw, mfa)
       const from = (loc.state as { from?: string } | null)?.from
-      navigate(from && from !== '/login' ? from : u.role === 'employee' ? '/portal' : '/admin', { replace: true })
+      const home = u.role === 'employee' ? '/portal' : '/admin'
+      // Return to the page that asked for sign-in only if it belongs to this role's area; otherwise an admin
+      // signing in after an employee on a shared browser would be sent to the employee portal (and vice versa).
+      navigate(from && from.startsWith(home) ? from : home, { replace: true })
     } catch (err) {
       if (isMfaRequired(err) && step === 'credentials') { setStep('mfa'); return }
       setError(err instanceof ApiError ? err.message : 'Sign-in failed')

@@ -81,6 +81,23 @@ async def test_settings_and_dashboard(admin_client: AsyncClient):
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/csv")
 
 
+async def test_spoofed_forwarded_for_does_not_reset_the_login_limit(client: AsyncClient):
+    from app.core.rate_limit import login_limiter
+
+    saved = login_limiter.limit
+    login_limiter.limit = 3
+    try:
+        codes = []
+        for i in range(4):  # a new fake source address on every attempt must still count against the real peer
+            r = await client.post("/api/v1/auth/login", json={"identifier": "nobody", "password": "wrong-password"},
+                                  headers={"X-Forwarded-For": f"203.0.113.{i + 1}"})
+            codes.append(r.status_code)
+        assert codes == [401, 401, 401, 429]
+    finally:
+        login_limiter.limit = saved
+        login_limiter._hits.clear()
+
+
 async def test_verify_session_creation_is_public_and_rate_limited(client: AsyncClient):
     r = await client.post("/api/v1/verify/sessions")
     assert r.status_code == 200
@@ -151,3 +168,13 @@ async def test_face_event_can_open_short_portal_session(client: AsyncClient, db)
     r = await client.post("/api/v1/attendance/events", json={"token": create_verification_token("face-sess-3", e9.id, "face"), "action": "check_in", "open_portal": True})
     assert r.status_code == 201, r.text
     assert r.json()["portal_session"] is None and "fg_access" not in client.cookies
+
+
+async def test_logout_ends_the_session_immediately(admin_client: AsyncClient):
+    # Regression: logout used to revoke only the refresh session while the access cookie stayed valid for
+    # ACCESS_TOKEN_MINUTES (the cookie deletions were set on a response object FastAPI then discarded).
+    assert (await admin_client.get("/api/v1/auth/me")).status_code == 200
+    assert (await admin_client.post("/api/v1/auth/logout")).status_code == 204
+    assert "fg_access" not in admin_client.cookies and "fg_refresh" not in admin_client.cookies
+    assert (await admin_client.get("/api/v1/auth/me")).status_code == 401
+    assert (await admin_client.post("/api/v1/auth/refresh")).status_code == 401

@@ -171,7 +171,7 @@ class FaceTemplate(Base):
     enrolment_id: Mapped[str] = mapped_column(ForeignKey("biometric_enrolments.id", ondelete="CASCADE"), index=True)
     employee_id: Mapped[str] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"), index=True)
     pose: Mapped[str] = mapped_column(String(16))  # front | left | right | up | down
-    embedding_enc: Mapped[bytes] = mapped_column(LargeBinary)  # AES-GCM(float32[128]), aad = template id
+    embedding_enc: Mapped[bytes] = mapped_column(LargeBinary)  # AES-GCM(float32[dim]), dim 256 for intel-fr-0095 / 128 for sface; aad = template id
     quality: Mapped[float] = mapped_column(Float, default=0.0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     enrolment: Mapped[BiometricEnrolment] = relationship(back_populates="templates")

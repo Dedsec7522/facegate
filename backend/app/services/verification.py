@@ -26,6 +26,7 @@ CHALLENGES = ("turn_left", "turn_right")
 CHALLENGE_TEXT = {"turn_left": "Slowly turn your head to the left", "turn_right": "Slowly turn your head to the right"}
 YAW_TRIGGER = 18.0  # degrees of estimated yaw that counts as "turned"
 YAW_CENTRE = 9.0
+SESSION_CONSISTENCY_MIN = 0.40  # minimum cosine between ANY two frontal embeddings of one verification session
 # Three frontal samples are required (captured automatically a few frames apart so they carry natural
 # variation); a slight left and right turn are optional extras that help with off-angle kiosks.
 ENROL_POSES = ("front", "front_2", "front_3", "left", "right")
@@ -159,11 +160,11 @@ class SessionManager:
     # ---- attendance --------------------------------------------------------------------------
     async def process_attendance_frame(self, s: Session, bgr: np.ndarray) -> dict:
         pipe = get_pipeline()
-        # Once the session holds enough frontal embeddings, later frames only need detection + PAD (for the
-        # liveness median, head-turn and motion checks) — this is the most expensive stage, so skip it.
-        want_emb = len(s.embeddings) < settings.embed_max_frames
+        # Every frame is embedded, never only the first few: the liveness evidence (PAD median, head turn, motion) is
+        # gathered across the whole session, and `_identify`'s consistency check is what ties that evidence to the
+        # identified face. Stopping early would let a photo supply the identity and a different live face the liveness.
         # Bystanders are identified too (one cheap embedding each) so the kiosk can label who else is in view.
-        a: FrameAnalysis = await pipe.analyse_async(bgr, want_embedding=want_emb, want_pad=True, max_yaw=60.0, want_others=True)
+        a: FrameAnalysis = await pipe.analyse_async(bgr, want_embedding=True, want_pad=True, max_yaw=60.0, want_others=True)
         s.frames += 1
         resp = self._frame_feedback(a, s)
         if a.state != "ok":
@@ -249,9 +250,12 @@ class SessionManager:
         pipe = get_pipeline()
         embs = np.stack(s.embeddings)
         mean = normalize(embs.mean(axis=0))
-        # Internal consistency: all frames should agree with the mean (guards against face swaps mid-session).
-        consistency = float((embs @ mean).min())
-        if consistency < 0.45:
+        # Internal consistency (guards against face swaps mid-session): every pair of frames must look like the same
+        # person. Comparing frames with their *mean* is not enough — after an even photo/live-face split the mean sits
+        # between the two identities and both halves score ~0.71 against it. Same-person frames seconds apart score
+        # far above 0.40; different people sit near 0 (LFW impostor 99.9th percentile ≈ 0.32 for intel-fr-0095).
+        consistency = float((embs @ embs.T).min())
+        if consistency < SESSION_CONSISTENCY_MIN:
             return self._finish(s, {"state": "rejected", "reason": "inconsistent", "message": "The face changed during verification. Please try again.",
                                     "liveness_score": live_avg, "match_score": None})
         s.probe = mean

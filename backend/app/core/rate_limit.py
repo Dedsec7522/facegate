@@ -40,9 +40,11 @@ generic_limiter = RateLimiter(limit=300, window_seconds=60)
 
 
 def client_ip(request: Request) -> str:
-    fwd = request.headers.get("x-forwarded-for")
-    if fwd:
-        return fwd.split(",")[0].strip()
+    # Never read X-Forwarded-For here: any client can send one, and the first entry is whatever it chose, which
+    # would let it dodge every per-IP limit and forge audit-log addresses. Uvicorn's proxy-headers middleware has
+    # already replaced request.client with the forwarded address, but only when the direct peer is a trusted proxy
+    # (--forwarded-allow-ips / FORWARDED_ALLOW_IPS; default 127.0.0.1). In Docker, nginx overwrites the header with
+    # $remote_addr and is the only route to the API.
     return request.client.host if request.client else "unknown"
 
 

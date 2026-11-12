@@ -42,7 +42,6 @@ class Settings(BaseSettings):
     inference_device: str = "cpu"  # OpenVINO / ONNX Runtime / OpenCV on CPU only; no GPU is used or required
     face_model: str = "intel-fr-0095"  # intel-fr-0095 (default) | sface-2021dec — changing it requires re-enrolment
     detect_max_side: int = 320  # frames are downscaled to this for detection only; alignment uses full resolution
-    embed_max_frames: int = 6  # a verification session stops embedding once it holds this many frontal embeddings
     detector_score_threshold: float = 0.8
     # Calibrated on LFW for intel-fr-0095: 0.45 ≈ FAR 5e-5 per comparison (SFace at its old 0.42 was ≈ 1e-4).
     match_accept_threshold: float = 0.45
@@ -76,7 +75,15 @@ class Settings(BaseSettings):
     @field_validator("inference_workers")
     @classmethod
     def _auto_workers(cls, v: int) -> int:
-        return v if v > 0 else max(2, (os.cpu_count() or 4) // 2)
+        if v > 0:
+            return v
+        # CPUs this process may actually use (respects affinity / container cpusets where the OS exposes it),
+        # not the host total — otherwise a CPU-limited container would start far too many workers.
+        try:
+            usable = len(os.sched_getaffinity(0))
+        except AttributeError:  # Windows / macOS
+            usable = os.cpu_count() or 4
+        return max(2, usable // 2)
 
     @property
     def is_prod(self) -> bool:

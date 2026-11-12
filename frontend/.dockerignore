@@ -1,0 +1,5 @@
+# The image installs its own Linux node_modules with `npm ci`; never copy the host's
+node_modules/
+dist/
+.env.local
+*.log

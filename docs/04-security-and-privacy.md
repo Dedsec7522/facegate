@@ -5,7 +5,8 @@
 | Area | Control | Where |
 |---|---|---|
 | Passwords | Argon2id (64 MiB, t=3), constant-time compare, dummy verify for unknown identifiers; login accepts username **or** email; the seeded `admin` / `Welcome123` account must be changed on first login | `app/core/security.py`, `api/v1/auth.py` |
-| Lockout | 5 failed logins → 15-minute lock; per-IP login limiter 10/min (and Nginx 5/min) | `auth.py`, `core/rate_limit.py`, `deploy/nginx` |
+| Lockout | 5 failed logins → 15-minute lock; per-IP login limiter 60/min (`LOGIN_PER_MINUTE_PER_IP`, and Nginx 5/min) | `auth.py`, `core/rate_limit.py`, `deploy/nginx` |
+| Client address | Per-IP limits and audit IPs use `request.client` as resolved by Uvicorn, which honours `X-Forwarded-For` only from trusted proxies (default 127.0.0.1); the app never parses the header itself. Nginx overwrites the header with `$remote_addr`, so a client-sent value cannot reach the API | `core/rate_limit.py`, `deploy/nginx/proxy_params_facegate` |
 | MFA | TOTP (RFC 6238) with QR provisioning; secret stored AES-GCM encrypted; required at login once enabled | `auth.py` |
 | Sessions | 15-min access JWT + 7-day rotating refresh token (only SHA-256 hash stored, revocable); HttpOnly, Secure, SameSite=Strict cookies | `auth.py`, `refresh_sessions` table |
 | RBAC | `admin` / `hr` / `employee` enforced by FastAPI dependencies on every route; employees can only read their own records | `core/deps.py` |
