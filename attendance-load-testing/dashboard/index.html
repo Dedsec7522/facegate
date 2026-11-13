@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FaceGate load test</title>
+<style>
+  :root { --bg:#f8f6ff; --card:#fff; --ink:#1e1b2e; --ink2:#4c4668; --ink3:#6b6487; --line:#e6e1f5; --brand:#6d28d9; --brand2:#a78bfa; --soft:#f1edff;
+          --ok:#15803d; --okbg:#dcfce7; --bad:#b91c1c; --badbg:#fee2e2; --warn:#b45309; --warnbg:#fef3c7; --info:#1d4ed8; }
+  :root[data-theme="dark"] { --bg:#15112b; --card:#1b1636; --ink:#f4f2ff; --ink2:#cfc9e8; --ink3:#9a93bd; --line:rgba(255,255,255,.1); --soft:#241d45; --brand2:#c4b5fd;
+          --ok:#4ade80; --okbg:rgba(74,222,128,.14); --bad:#f87171; --badbg:rgba(248,113,113,.14); --warn:#fbbf24; --warnbg:rgba(251,191,36,.14); --info:#93c5fd; }
+  * { box-sizing:border-box } html,body { margin:0 }
+  body { background:var(--bg); color:var(--ink); font:14px/1.5 Inter,ui-sans-serif,system-ui,"Segoe UI",sans-serif; padding:16px; }
+  h1 { font-size:18px; margin:0 } h2 { font-size:13px; margin:0 0 10px; font-weight:600; color:var(--ink2); text-transform:uppercase; letter-spacing:.04em }
+  .mono { font-family:ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace } .num { font-variant-numeric:tabular-nums }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; min-width:0 }
+  .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap }
+  .grid { display:grid; gap:12px } .k8 { grid-template-columns:repeat(auto-fit,minmax(140px,1fr)) } .c2 { grid-template-columns:repeat(auto-fit,minmax(340px,1fr)) }
+  .kpi .v { font-size:24px; font-weight:650; line-height:1.15 } .kpi .l { font-size:12px; color:var(--ink3) } .kpi .s { font-size:11.5px; color:var(--ink3) }
+  .pill { display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:2px 10px; font-size:12px; font-weight:600; background:var(--soft); color:var(--ink2) }
+  .pill i { width:7px; height:7px; border-radius:50%; background:currentColor } .pill.run { background:var(--okbg); color:var(--ok) } .pill.run i { animation:pulse 1.1s infinite }
+  .pill.done { background:var(--soft); color:var(--brand) } .pill.err { background:var(--badbg); color:var(--bad) } .pill.spawn { background:var(--warnbg); color:var(--warn) }
+  @keyframes pulse { 50% { opacity:.3; transform:scale(1.5) } }
+  .ok { color:var(--ok) } .bad { color:var(--bad) } .warn { color:var(--warn) } .muted { color:var(--ink3) }
+  .bar { height:8px; border-radius:99px; background:var(--soft); overflow:hidden } .bar > div { height:100%; background:var(--brand); border-radius:99px; transition:width .4s }
+  canvas { width:100%; height:150px; display:block } .legend { display:flex; gap:12px; flex-wrap:wrap; font-size:11.5px; color:var(--ink3); margin-top:6px }
+  .legend b { display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; vertical-align:middle }
+  table { width:100%; border-collapse:collapse; font-size:12.5px } th { text-align:left; color:var(--ink3); font-weight:600; padding:5px 8px; border-bottom:1px solid var(--line); white-space:nowrap }
+  td { padding:5px 8px; border-bottom:1px solid var(--line); vertical-align:top } tr:last-child td { border-bottom:0 } td.r, th.r { text-align:right }
+  .log { height:300px; overflow:auto; background:var(--soft); border-radius:10px; padding:8px 10px; font-size:12px; white-space:pre; }
+  .log div.bad { color:var(--bad) } .log div.rej { color:var(--warn) }
+  input, select, button { font:inherit; color:var(--ink); background:var(--card); border:1px solid var(--line); border-radius:8px; padding:5px 9px }
+  button, a.btn { cursor:pointer; text-decoration:none; color:var(--brand); font-weight:600; border:1px solid var(--line); border-radius:8px; padding:5px 10px; background:var(--card); display:inline-block }
+  .tabs { display:flex; gap:4px; background:var(--soft); padding:4px; border-radius:10px } .tabs button { border:0; background:transparent; color:var(--ink3); padding:5px 12px }
+  .tabs button.on { background:var(--card); color:var(--ink); box-shadow:0 1px 2px rgba(46,16,101,.12) }
+  .hist { display:flex; align-items:flex-end; gap:3px; height:70px } .hist div { flex:1; background:var(--brand2); border-radius:3px 3px 0 0; min-height:1px }
+  .tag { display:inline-block; border-radius:6px; padding:0 7px; font-size:11.5px; font-weight:600 } .tag.ok { background:var(--okbg) } .tag.bad { background:var(--badbg) } .tag.warn { background:var(--warnbg) } .tag.na { background:var(--soft); color:var(--ink3) }
+  a { color:var(--brand) } .scroll { overflow:auto }
+  #offline { display:none; padding:40px 16px; text-align:center }
+</style>
+</head>
+<body>
+<div id="offline" class="card"><h1>The load-test harness is not answering</h1><p class="muted">Start it from <span class="mono">attendance-load-testing</span>: <span class="mono">./start.ps1</span></p></div>
+<div id="app">
+  <div class="row" style="justify-content:space-between;margin-bottom:12px">
+    <div class="row">
+      <h1 id="title">FaceGate load test</h1><span id="state" class="pill"><i></i>idle</span><span id="sub" class="muted"></span>
+    </div>
+    <div class="row">
+      <div class="tabs" id="tabs"><button data-t="live" class="on">Live</button><button data-t="pred">Predictions</button><button data-t="hist">History &amp; reports</button></div>
+      <a class="btn" id="locust" target="_blank" rel="noopener">Locust controls ↗</a>
+    </div>
+  </div>
+
+  <section id="t-live">
+    <div class="card" style="margin-bottom:12px">
+      <div class="row" style="justify-content:space-between"><div><b id="stage">No test has run yet</b> <span id="scn" class="muted"></span></div><div class="muted num" id="prog"></div></div>
+      <div class="bar" style="margin-top:8px"><div id="progbar" style="width:0"></div></div>
+      <div id="suite" class="row" style="margin-top:10px;gap:6px"></div>
+    </div>
+    <div class="grid k8" style="margin-bottom:12px" id="kpis"></div>
+    <div class="grid c2" style="margin-bottom:12px">
+      <div class="card"><h2>Virtual users and recognitions in flight</h2><canvas id="c1"></canvas><div class="legend" id="l1"></div></div>
+      <div class="card"><h2>Requests per second</h2><canvas id="c2"></canvas><div class="legend" id="l2"></div></div>
+      <div class="card"><h2>Response time, 95th percentile (ms)</h2><canvas id="c3"></canvas><div class="legend" id="l3"></div></div>
+      <div class="card"><h2>CPU and memory (% of the machine)</h2><canvas id="c4"></canvas><div class="legend" id="l4"></div></div>
+    </div>
+    <div class="grid c2" style="margin-bottom:12px">
+      <div class="card"><h2>Recognition against ground truth</h2><div id="recog"></div></div>
+      <div class="card"><h2>Attendance validation</h2><div id="attend"></div></div>
+    </div>
+    <div class="grid c2">
+      <div class="card"><div class="row" style="justify-content:space-between;margin-bottom:8px"><h2 style="margin:0">Event log</h2>
+        <div class="row"><input id="q" placeholder="Filter (employee, step…)" size="20"><select id="fv"><option value="">All</option><option value="correct">Correct</option><option value="rejected">Rejected</option><option value="incorrect">Incorrect</option><option value="error">Error</option><option value="correct_reject">Correctly refused</option><option value="false_accept">False accept</option></select></div></div>
+        <div id="log" class="log mono"></div></div>
+      <div class="card"><h2>Errors and unexpected results</h2><div id="errs" class="log mono"></div></div>
+    </div>
+  </section>
+
+  <section id="t-pred" style="display:none">
+    <div class="card">
+      <div class="row" style="margin-bottom:10px"><select id="prun"></select><input id="pq" placeholder="Search employee, step, reason" size="28">
+        <select id="pv"><option value="">All results</option><option value="correct">Correct</option><option value="rejected">Rejected</option><option value="incorrect">Incorrect</option><option value="error">Error</option><option value="correct_reject">Correctly refused</option><option value="false_accept">False accept</option></select>
+        <button id="pgo">Search</button><a class="btn" id="pcsv">Export CSV</a><span id="pn" class="muted"></span></div>
+      <div class="scroll"><table id="ptab"></table></div>
+    </div>
+  </section>
+
+  <section id="t-hist" style="display:none">
+    <div class="card" style="margin-bottom:12px"><h2>Final reports</h2><div id="reports" class="row"></div></div>
+    <div class="card"><h2>Test execution history</h2><div class="scroll"><table id="htab"></table></div></div>
+  </section>
+</div>
+<script>
+const P = new URLSearchParams(location.search);
+document.documentElement.dataset.theme = P.get('theme') === 'dark' ? 'dark' : 'light';
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const n = (x, d = 0) => x == null ? '–' : Number(x).toLocaleString('en-GB', {maximumFractionDigits: d, minimumFractionDigits: d});
+const pct = (x, d = 2) => x == null ? '–' : (x * 100).toFixed(d) + '%';
+const ms = (x) => x == null ? '–' : x >= 10000 ? (x / 1000).toFixed(1) + ' s' : Math.round(x) + ' ms';
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+$('locust').href = location.origin + '/';
+
+function chart(id, legendId, series, opt = {}) {
+  const c = $(id), dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  if (c.width !== w * dpr) { c.width = w * dpr; c.height = h * dpr; }
+  const g = c.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  const L = 38, R = 6, T = 6, B = 16, len = Math.max(...series.map((s) => s.data.length), 2);
+  let max = opt.max || Math.max(1, ...series.flatMap((s) => s.data.filter((v) => v != null))); max = opt.max || max * 1.12;
+  g.strokeStyle = css('--line'); g.fillStyle = css('--ink3'); g.font = '10px ui-sans-serif,system-ui'; g.lineWidth = 1;
+  for (let i = 0; i <= 3; i++) { const y = T + (h - T - B) * i / 3; g.beginPath(); g.moveTo(L, y); g.lineTo(w - R, y); g.stroke(); g.fillText(n(max * (1 - i / 3), max < 10 ? 1 : 0), 2, y + 3); }
+  if (opt.span) g.fillText(opt.span, w - R - g.measureText(opt.span).width, h - 3);
+  for (const s of series) {
+    g.strokeStyle = s.color; g.lineWidth = 1.6; g.beginPath(); let pen = false;
+    s.data.forEach((v, i) => { if (v == null) { pen = false; return; } const x = L + (w - L - R) * i / (len - 1), y = T + (h - T - B) * (1 - Math.min(v, max) / max); pen ? g.lineTo(x, y) : g.moveTo(x, y); pen = true; });
+    g.stroke();
+  }
+  $(legendId).innerHTML = series.map((s) => `<span><b style="background:${s.color}"></b>${esc(s.label)}${s.data.length ? ': ' + n(s.data[s.data.length - 1], s.d ?? 0) : ''}</span>`).join('');
+}
+
+const kpi = (l, v, s = '', cls = '') => `<div class="card kpi"><div class="l">${l}</div><div class="v num ${cls}">${v}</div><div class="s">${s}</div></div>`;
+const tag = (ok, t) => `<span class="tag ${ok === null ? 'na' : ok ? 'ok' : 'bad'}">${t}</span>`;
+let last = null;
+
+function render(d) {
+  last = d;
+  const m = d.metrics, v = d.verdicts, st = d.state, meta = d.meta || {}, fl = d.flows;
+  const running = st === 'running' || st === 'spawning';
+  const cls = running ? (st === 'spawning' ? 'spawn' : 'run') : d.finished ? 'done' : '';
+  $('state').className = 'pill ' + cls; $('state').innerHTML = `<i></i>${running ? st : d.finished ? 'finished' : 'idle'}`;
+  $('sub').textContent = meta.target ? `target ${meta.target} · ${meta.enrolled_employees} enrolled test employees` : '';
+  $('stage').textContent = meta.stage ? `${meta.stage}` : 'No test has run yet';
+  $('scn').textContent = meta.scenario ? `· ${meta.scenario} · ${meta.users} users · ${d.elapsed != null ? Math.round(d.elapsed) + ' s' : ''}` : '';
+  const done = fl.planned ? Math.min(1, fl.done / fl.planned) : 0;
+  $('prog').textContent = fl.planned ? `${n(fl.done)} / ${n(fl.planned)} ${meta.scenario === 'accuracy' || meta.scenario === 'liveness' ? 'test cases' : 'employees'} finished` : '';
+  $('progbar').style.width = (done * 100).toFixed(1) + '%';
+  const su = d.suite;
+  $('suite').innerHTML = su && su.stages ? su.stages.map((s) => `<span class="tag ${s.status === 'done' ? (s.ok === false ? 'bad' : 'ok') : s.status === 'running' ? 'warn' : 'na'}" title="${esc(s.note || '')}">${esc(s.name)}${s.status === 'running' ? ' …' : ''}</span>`).join('') + (su.finished ? ' <span class="muted">suite complete</span>' : '') : '';
+  const bad = (v.incorrect || 0) + (v.false_accept || 0);
+  $('kpis').innerHTML = [
+    kpi('Active virtual users', n(d.users), meta.users ? `of ${n(meta.users)} requested` : ''),
+    kpi('Recognitions in flight', n(d.inflight.now), `peak ${n(d.inflight.peak)} at once`),
+    kpi('Requests', n(d.locust.requests), `${n(d.locust.rps, 1)} per second now`),
+    kpi('Failed requests', n(d.locust.failures), d.locust.requests ? pct(d.locust.failures / d.locust.requests) + ' of all' : '', d.locust.failures ? 'bad' : ''),
+    kpi('Time to a correct match, p95', ms(m.identify_ms.p95), `median ${ms(m.identify_ms.p50)} · all attempts p95 ${ms(m.recognition_ms.p95)}`),
+    kpi('Model time per frame', ms(m.server_frame_ms.p50), `p95 ${ms(m.server_frame_ms.p95)} (server-reported)`),
+    kpi('Correct matches', n(v.correct || 0), m.correct_rate != null ? pct(m.correct_rate) + ' of decided' : '', 'ok'),
+    kpi('Incorrect matches', n(bad), 'wrong person or false accept', bad ? 'bad' : ''),
+    kpi('Rejected (genuine)', n(v.rejected || 0), m.frr != null ? 'FRR ' + pct(m.frr) : '', (v.rejected || 0) ? 'warn' : ''),
+    kpi('Errors / timeouts', n(v.error || 0), 'no verdict reached', (v.error || 0) ? 'bad' : ''),
+  ].join('');
+  const tl = d.timeline, col = (k) => tl.map((x) => x[k]), span = tl.length ? `last ${Math.round(tl[tl.length - 1].t - tl[0].t)} s` : '';
+  chart('c1', 'l1', [{data: col('users'), color: css('--brand'), label: 'users'}, {data: col('inflight'), color: '#0ea5e9', label: 'in flight'}], {span});
+  chart('c2', 'l2', [{data: col('rps'), color: css('--brand'), label: 'requests/s', d: 1}, {data: col('fail'), color: '#dc2626', label: 'failures/s', d: 2}], {span});
+  chart('c3', 'l3', [{data: col('p95'), color: css('--brand'), label: 'all requests p95'}], {span});
+  chart('c4', 'l4', [{data: col('cpu'), color: css('--ink3'), label: 'CPU total', d: 1}, {data: col('api_cpu'), color: css('--brand'), label: 'FaceGate API', d: 1}, {data: col('gen_cpu'), color: '#0ea5e9', label: 'load generator', d: 1}, {data: col('other_cpu'), color: '#f59e0b', label: 'everything else', d: 1}, {data: col('ram'), color: '#16a34a', label: 'RAM', d: 1}], {max: 100, span});
+  const hmax = Math.max(1, ...d.score_hist);
+  const cats = Object.entries(d.by_category).map(([c, x]) => `<tr><td>${esc(c)}</td><td class="r num">${n(Object.values(x).reduce((a, b) => a + b, 0))}</td><td>${Object.entries(x).map(([k, c2]) => `${k.replace('_', ' ')} ${n(c2)}`).join(' · ')}</td></tr>`).join('');
+  $('recog').innerHTML = `<table>
+      <tr><th>Metric</th><th class="r">Value</th><th>How it is counted</th></tr>
+      <tr><td>Correct identification</td><td class="r num">${pct(m.correct_rate)}</td><td class="muted">correct ÷ genuine attempts with a verdict (${n(m.genuine_decided)})</td></tr>
+      <tr><td>Incorrect identification</td><td class="r num">${pct(m.incorrect_rate)}</td><td class="muted">matched to another employee ÷ same</td></tr>
+      <tr><td>False rejection (FRR)</td><td class="r num">${pct(m.frr)}</td><td class="muted">genuine but refused ÷ same</td></tr>
+      <tr><td>False acceptance (FAR)</td><td class="r num">${pct(m.far)}</td><td class="muted">non-employees identified ÷ non-employee attempts (${n(m.negatives_decided)})</td></tr>
+      <tr><td>Precision / recall / F1</td><td class="r num">${pct(m.precision, 1)} / ${pct(m.recall, 1)} / ${pct(m.f1, 1)}</td><td class="muted">over identifications</td></tr>
+      <tr><td>Match score (cosine)</td><td class="r num">${n(m.score_mean, 3)}</td><td class="muted">mean of correct matches; min ${n(m.score_min, 3)}; not a probability</td></tr>
+    </table>
+    <div class="row" style="align-items:flex-end;margin-top:10px;gap:16px"><div style="flex:1;min-width:180px"><div class="muted" style="font-size:11.5px">Match-score distribution, 0.40 → 1.00</div><div class="hist">${d.score_hist.map((x) => `<div style="height:${(x / hmax * 100).toFixed(0)}%" title="${x}"></div>`).join('')}</div></div>
+    <div style="flex:1;min-width:200px;font-size:12px">${Object.entries(d.reasons).map(([k, c]) => `<div>${esc(k)} <b class="num">${n(c)}</b></div>`).join('') || '<span class="muted">No rejections or errors so far</span>'}</div></div>
+    ${cats ? `<table style="margin-top:10px"><tr><th>Input type</th><th class="r">Tests</th><th>Verdicts</th></tr>${cats}</table>` : ''}`;
+  const a = d.attendance, order = ['LOGIN', 'DUP_LOGIN', 'LOGOUT', 'DUP_LOGOUT', 'SCAN', 'SCAN_UNKNOWN'];
+  const steps = Object.entries(d.by_step).sort((x, y) => order.indexOf(x[0]) - order.indexOf(y[0])).map(([k, s]) => `<tr><td>${esc(k)}</td><td class="r num">${n(s.n)}</td><td class="r num">${n(s.correct)}</td><td class="r num">${ms(s.p50)}</td><td class="r num">${ms(s.p95)}</td></tr>`).join('');
+  $('attend').innerHTML = `<div class="row" style="gap:8px;margin-bottom:10px">${tag(true, `${n(a.created)} recorded`)}${tag(true, `${n(a.refused_as_expected)} duplicates refused`)}${tag(a.unexpected ? false : null, `${n(a.unexpected)} unexpected`)}${tag(a.wrong_employee ? false : null, `${n(a.wrong_employee)} wrong employee`)}</div>
+    <table><tr><th>Step</th><th class="r">Recognitions</th><th class="r">As expected</th><th class="r">Median</th><th class="r">p95</th></tr>${steps || '<tr><td colspan="5" class="muted">Nothing yet</td></tr>'}</table>
+    <p class="muted" style="font-size:12px;margin:10px 0 0">Attendance write: median ${ms(m.attendance_write_ms.p50)}, p95 ${ms(m.attendance_write_ms.p95)}. Frames skipped because the server was busy: ${n(d.busy_frames)}. Stored rows are checked against the database after each stage (History tab).</p>`;
+  const q = $('q').value.toLowerCase(), fv = $('fv').value;
+  const line = (e) => `[${e.ts}] ${e.who.padEnd(8)} | ${e.step.padEnd(12)} | ${e.text} | ${e.score != null ? 'score ' + e.score.toFixed(3) : 'score n/a'} | ${e.ms} ms${e.att ? ' | ' + e.att : ''}`;
+  const lc = (e) => e.verdict === 'incorrect' || e.verdict === 'false_accept' || e.verdict === 'error' || /UNEXPECTED/.test(e.att) ? 'bad' : e.verdict === 'rejected' ? 'rej' : '';
+  const log = $('log'), stick = log.scrollTop + log.clientHeight >= log.scrollHeight - 30;
+  log.innerHTML = d.events.filter((e) => (!fv || e.verdict === fv) && (!q || line(e).toLowerCase().includes(q))).map((e) => `<div class="${lc(e)}">${esc(line(e))}</div>`).join('') || '<span class="muted">Waiting for the first recognition…</span>';
+  if (stick) log.scrollTop = log.scrollHeight;
+  $('errs').innerHTML = d.errors.map((e) => `<div class="bad">${esc(line(e))}</div>`).join('') || '<span class="muted">None</span>';
+}
+
+async function poll() {
+  try {
+    const r = await fetch('/facegate/data'); render(await r.json());
+    $('offline').style.display = 'none'; $('app').style.display = '';
+  } catch (e) { $('offline').style.display = 'block'; $('app').style.display = 'none'; }
+  setTimeout(poll, 1000);
+}
+
+async function loadPred() {
+  const run = $('prun').value, qs = `run=${encodeURIComponent(run)}&q=${encodeURIComponent($('pq').value)}&verdict=${$('pv').value}`;
+  $('pcsv').href = `/facegate/predictions?${qs}&format=csv`;
+  const d = await (await fetch(`/facegate/predictions?${qs}&limit=1000`)).json();
+  $('pn').textContent = `${n(d.total)} rows` + (d.total > d.rows.length ? ` (showing the latest ${d.rows.length}; export for all)` : '');
+  const res = (r) => r.verdict === 'correct' || r.verdict === 'correct_reject' ? tag(true, 'PASS') : r.verdict === 'rejected' ? `<span class="tag warn">REJECTED</span>` : tag(false, 'FAIL');
+  $('ptab').innerHTML = '<tr><th>Time</th><th>Test identity</th><th>Step</th><th>Expected</th><th>Predicted</th><th class="r">Score</th><th class="r">Response</th><th>Attendance</th><th>Result</th><th>Detail</th></tr>' +
+    d.rows.reverse().map((r) => `<tr><td class="mono">${esc(r.time)}</td><td>${esc(r.label)}</td><td>${esc(r.step)}</td><td>${esc(r.expected_code || (r.category.startsWith('genuine') ? '' : 'nobody'))}</td><td>${esc(r.predicted_code || (r.outcome === 'identified' ? '?' : 'none'))}</td><td class="r num">${r.match_score == null ? 'n/a' : r.match_score.toFixed(3)}</td><td class="r num">${ms(r.total_ms)}</td><td>${r.attendance_status == null ? '<span class="muted">–</span>' : (r.attendance_ok ? 'Yes' : 'No') + ' (' + r.attendance_status + ')'}</td><td>${res(r)}</td><td class="muted">${esc(r.reason || r.error || r.verdict.replace('_', ' '))}</td></tr>`).join('');
+}
+
+async function loadHist() {
+  const d = await (await fetch('/facegate/history')).json();
+  $('reports').innerHTML = d.reports.map((f) => `<a class="btn" target="_blank" href="/facegate/files/reports/${encodeURIComponent(f)}">${esc(f)}</a>`).join('') || '<span class="muted">Generated when the suite finishes.</span>';
+  $('htab').innerHTML = '<tr><th>Started</th><th>Stage</th><th class="r">Users</th><th class="r">Peak in flight</th><th class="r">Recognitions</th><th class="r">Correct</th><th class="r">Wrong</th><th class="r">p95</th><th class="r">CPU</th><th>Attendance</th><th>Database</th><th>Files</th></tr>' +
+    d.runs.map((r) => { const v = r.verdicts || {}, wrong = (v.incorrect || 0) + (v.false_accept || 0), a = r.attendance || {};
+      return `<tr><td class="mono">${new Date(r.started * 1000).toLocaleString('en-GB')}</td><td>${esc(r.stage)} <span class="muted">${esc(r.scenario)}</span></td><td class="r num">${n(r.users)}</td><td class="r num">${n(r.inflight_peak)}</td><td class="r num">${n(r.predictions)}</td><td class="r num">${pct(r.correct_rate)}</td><td class="r num ${wrong ? 'bad' : ''}">${n(wrong)}</td><td class="r num">${ms(r.p95_ms)}</td><td class="r num">${r.cpu_avg == null ? '–' : r.cpu_avg + '%'}</td><td>${n(a.created)} recorded, ${n(a.unexpected)} unexpected</td><td>${r.db_ok == null ? '<span class="muted">not checked</span>' : tag(r.db_ok, r.db_ok ? 'consistent' : (r.db_problems || 0) + ' problems')}</td><td>${r.files.map((f) => `<a target="_blank" href="/facegate/files/test_results/runs/${encodeURIComponent(r.run_id)}/${encodeURIComponent(f)}">${esc(f.replace(/\.(html|csv|json|md)$/, ''))}</a>`).join(' · ')}</td></tr>`; }).join('');
+  const sel = $('prun'), cur = sel.value;
+  sel.innerHTML = d.runs.map((r) => `<option value="${esc(r.run_id)}">${esc(r.run_id)}</option>`).join('') + ((last && last.meta && last.meta.run_id && !d.runs.some((r) => r.run_id === last.meta.run_id)) ? `<option value="${esc(last.meta.run_id)}">${esc(last.meta.run_id)} (running)</option>` : '');
+  if (cur) sel.value = cur; else if (last && last.meta && last.meta.run_id) sel.value = last.meta.run_id;
+}
+
+$('tabs').addEventListener('click', async (e) => {
+  const t = e.target.dataset.t; if (!t) return;
+  for (const b of $('tabs').children) b.classList.toggle('on', b === e.target);
+  for (const s of ['live', 'pred', 'hist']) $('t-' + s).style.display = s === t ? '' : 'none';
+  if (t !== 'live') { await loadHist(); if (t === 'pred') loadPred(); }
+});
+$('pgo').onclick = loadPred; $('prun').onchange = loadPred; $('pv').onchange = loadPred; $('pq').onkeydown = (e) => { if (e.key === 'Enter') loadPred(); };
+poll();
+</script>
+</body>
+</html>

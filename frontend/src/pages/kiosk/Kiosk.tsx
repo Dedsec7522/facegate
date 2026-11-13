@@ -6,6 +6,7 @@ import { Logo } from '../../components/layout/Logo'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Field'
 import { CameraStage, type StageMode } from '../../components/camera/CameraStage'
+import { FillLight, FillLightNote, useLowLightAssist } from '../../components/camera/FillLight'
 import { FrameAlerts } from '../../components/camera/FrameAlerts'
 import { useCamera } from '../../components/camera/useCamera'
 import { useVerificationStream } from '../../components/camera/useVerificationStream'
@@ -24,6 +25,7 @@ const AUTO_CONFIRM_SECONDS = 3
 
 const REASON_TEXT: Record<string, string> = {
   spoof: 'Liveness check failed. Please use the live camera — not a photo, phone or screen.',
+  replay: 'This looks like a photo or a screen, not a live face. Show your own face to the camera.',
   challenge_failed: 'The head-turn check was not completed. Please try again and follow the instruction on screen.',
   unknown: 'We could not match your face to an enrolled employee. If you are new, ask an administrator to enrol you.',
   ambiguous: 'We could not confidently tell you apart from another enrolled person. Please try again in better light.',
@@ -100,10 +102,12 @@ export default function Kiosk() {
   }, [screen, result, actionError, blockedUntil])
 
   const fb = stream.feedback
+  const fillLight = useLowLightAssist(fb, screen === 'scanning', cam)
   const stageMode: StageMode = screen === 'recorded' || screen === 'identified' ? 'success' : screen === 'failed' ? 'failure' : screen === 'scanning' ? 'scanning' : 'idle'
 
   return (
-    <div className="theme-dark min-h-dvh bg-surface text-ink">
+    <div className={`theme-dark min-h-dvh bg-surface text-ink transition-[padding] duration-300 ${fillLight ? 'p-[9vmin]' : ''}`}>
+      <FillLight on={fillLight} />
       <header className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
         <Link to="/" className="flex items-center gap-2.5"><Logo className="size-8" /><span className="text-[15px] font-semibold">FaceGate</span></Link>
         <div className="text-right">
@@ -139,6 +143,7 @@ export default function Kiosk() {
                 <p className="text-xs font-semibold uppercase tracking-wider text-accent-400">Verifying</p>
                 <h2 className="mt-2 text-2xl font-semibold leading-tight" aria-live="polite">{guidanceFor(fb, stream.phase, stream.error)}</h2>
                 <Steps fb={fb} />
+                <FillLightNote on={fillLight} className="mt-4" />
                 <FrameAlerts fb={fb} className="mt-4" />
                 <Button variant="ghost" className="mt-auto self-start text-ink-3" onClick={reset} leftIcon={<ArrowLeft className="size-4" />}>Cancel</Button>
               </Panel>

@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     refresh_token_days: int = 7
     verification_token_seconds: int = 90
     verify_session_ttl_seconds: int = 60  # fail fast with a clear reason instead of a long silent wait
+    # How long a camera frame waits for a free inference slot before the kiosk is told "busy". The kiosk sends its next
+    # frame only after this one is answered, so this is the back-pressure that stops a queue of kiosks re-sending frames.
+    busy_hold_seconds: float = 1.0
     login_max_attempts: int = 5
     login_lockout_minutes: int = 15
     login_per_minute_per_ip: int = 60  # shared office NAT: many people, one address; accounts still lock after 5 failures
@@ -51,6 +54,12 @@ class Settings(BaseSettings):
     pad_spoof_threshold: float = 0.20  # median below this (after pad_reject_min_frames) is a clear spoof; in between → step-up head-turn
     pad_reject_min_frames: int = 14  # frames of evidence required before a session is rejected as spoof
     pad_min_frames: int = 3
+    # Replay detector (anti-spoof-mn3): a session whose median "real face" probability is below the threshold after
+    # `replay_min_frames` frontal frames is refused as a photo or screen, under every liveness policy. Genuine LFW
+    # photos: 0.8 % of single frames fall below 0.45, 0.5 % below 0.2. Costs about 7 ms per frame, no extra frames.
+    replay_check: bool = True
+    replay_spoof_threshold: float = 0.30
+    replay_min_frames: int = 3
     embed_min_frames: int = 3
     motion_min_frames: int = 5  # frames of landmark history needed before the frozen-stream check can pass
     min_face_size: int = 80  # px in the streamed frame; ~1 m from a laptop webcam

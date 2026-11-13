@@ -16,9 +16,17 @@ export function FrameAlerts({ fb, subject = 'the person closest to the camera', 
   const covered = fb.issues?.find((i) => COVER_ISSUES.includes(i))
   const people = fb.faces ?? 0
   const others = fb.others ?? []
-  if (!covered && people < 2) return null
+  // Shown from the first suspicious frame; the server refuses the scan once it has seen a few of them.
+  const photo = fb.replay?.score != null && fb.replay.score < 0.3
+  if (!covered && !photo && people < 2) return null
   return (
     <div className={cn('space-y-2', className)}>
+      {photo && (
+        <p role="alert" className="flex gap-2 rounded-lg border border-red-400/50 bg-red-500/10 px-3 py-2 text-sm text-ink-2">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-red-500" />
+          <span><strong className="text-red-500">Photo or screen detected.</strong> This does not look like a live face. Show your own face to the camera, not a picture or a phone.</span>
+        </p>
+      )}
       {covered && (
         <p role="alert" className="flex gap-2 rounded-lg border border-red-400/50 bg-red-500/10 px-3 py-2 text-sm text-ink-2">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-red-500" />

@@ -60,6 +60,7 @@ class Session:
     frames: int = 0
     last_frame_at: float = 0.0
     live_probs: list[float] = field(default_factory=list)
+    real_probs: list[float] = field(default_factory=list)  # replay detector, frontal frames only
     embeddings: list[np.ndarray] = field(default_factory=list)
     yaw_history: list[float] = field(default_factory=list)
     challenge_state: str = "pending"  # pending | turned | passed | failed
@@ -158,13 +159,13 @@ class SessionManager:
         return True
 
     # ---- attendance --------------------------------------------------------------------------
-    async def process_attendance_frame(self, s: Session, bgr: np.ndarray) -> dict:
+    async def process_attendance_frame(self, s: Session, bgr: np.ndarray, permit=None) -> dict:
         pipe = get_pipeline()
         # Every frame is embedded, never only the first few: the liveness evidence (PAD median, head turn, motion) is
         # gathered across the whole session, and `_identify`'s consistency check is what ties that evidence to the
         # identified face. Stopping early would let a photo supply the identity and a different live face the liveness.
         # Bystanders are identified too (one cheap embedding each) so the kiosk can label who else is in view.
-        a: FrameAnalysis = await pipe.analyse_async(bgr, want_embedding=True, want_pad=True, max_yaw=60.0, want_others=True)
+        a: FrameAnalysis = await pipe.analyse_async(bgr, permit=permit, want_embedding=True, want_pad=True, max_yaw=60.0, want_others=True)
         s.frames += 1
         resp = self._frame_feedback(a, s)
         if a.state != "ok":
@@ -181,6 +182,8 @@ class SessionManager:
         if abs(yaw) <= 25:
             if a.live_prob is not None:
                 s.live_probs.append(a.live_prob)
+            if a.real_prob is not None:
+                s.real_probs.append(a.real_prob)
             if a.embedding is not None:
                 s.embeddings.append(a.embedding)
 
@@ -195,6 +198,14 @@ class SessionManager:
             }
         )
 
+        # Photo or screen held up to the camera: refused under every policy, as soon as there is enough evidence.
+        # This adds no waiting: the frames are the ones the session collects anyway.
+        real_med = float(np.median(s.real_probs)) if s.real_probs else None
+        suspected = real_med is not None and len(s.real_probs) >= settings.replay_min_frames and real_med < settings.replay_spoof_threshold
+        resp["replay"] = {"frames": len(s.real_probs), "score": None if real_med is None else round(real_med, 3), "suspected": suspected}
+        if suspected:
+            return self._finish(s, {"state": "rejected", "reason": "replay", "liveness_score": live_avg, "replay_score": round(real_med, 3),
+                                    "message": "This looks like a photo or a screen, not a live face. Show your own face to the camera."})
         enough_pad = len(s.live_probs) >= settings.pad_min_frames
         enough_emb = len(s.embeddings) >= settings.embed_min_frames
         # Step-up: passive evidence is neither clearly live nor clearly a spoof → ask for a head turn once.
@@ -282,6 +293,8 @@ class SessionManager:
 
     def _finish(self, s: Session, result: dict) -> dict:
         s.done = True
+        if s.real_probs and "replay_score" not in result:   # recorded with every verdict so the threshold can be tuned from real scans
+            result["replay_score"] = round(float(np.median(s.real_probs)), 3)
         s.result = result
         return {**result, "session_id": s.id}
 

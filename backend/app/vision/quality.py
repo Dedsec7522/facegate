@@ -113,6 +113,44 @@ def occlusion(bgr: np.ndarray, face: Face) -> list[str]:
         dark_flat = [0 <= _brightness(p) < 70 and _brightness(p) < 0.45 * ref_b and float(p.std()) < 22 for p in eye_patches]
         if all(dark_flat):
             issues.append("eyes_covered")
+    issues += [i for i in _partial_cover(bgr, re, le, mouth_mid, d, ref_b, eye_patches) if i not in issues]
+    return issues
+
+
+def _flatness(region: np.ndarray | None) -> float:
+    """Grey-level spread of a patch; a card, paper or cloth held over the face is far flatter than an eye or a mouth."""
+    return -1.0 if region is None or region.size == 0 else float(cv2.cvtColor(region, cv2.COLOR_BGR2GRAY).std())
+
+
+def _partial_cover(bgr: np.ndarray, re: np.ndarray, le: np.ndarray, mouth_mid: np.ndarray, d: float, ref_b: float, eye_patches: list) -> list[str]:
+    """Covers the first checks miss because the nose stays visible or only one side is hidden. Synthetic covers on
+    300 LFW faces passed the older rules 95 % of the time for a mask worn below the nose, 97 % for one covered eye
+    and 45 % for half the face. All three rules compare the face with itself, so lighting and skin tone cancel out:
+
+    - mouth: the lip band and the chin below it are both non-skin and at least as bright as the skin reference
+      (cloth, paper, a light mask). A beard is non-skin too but darker than the skin, so it is not flagged.
+    - one eye: one eye patch is flat while the other has normal eye contrast (a hand, a card, an eye patch).
+    - one side: one cheek is skin and the other is not, and the two differ strongly in brightness or the hidden
+      one is flat (half the face behind a phone, paper or a door frame).
+    A hand or anything skin-coloured and textured can still pass; this remains a heuristic, not a trained model."""
+    issues: list[str] = []
+    lips = _region(bgr, mouth_mid[0], mouth_mid[1], 0.8 * d, 0.22 * d)
+    chin = _region(bgr, mouth_mid[0], mouth_mid[1] + 0.42 * d, 0.7 * d, 0.25 * d)
+    if ref_b > 70 and lips is not None and chin is not None:
+        if 0 <= _skin_ratio(lips) < 0.3 and 0 <= _skin_ratio(chin) < 0.3 and min(_brightness(lips), _brightness(chin)) >= 0.85 * ref_b:
+            issues.append("covered")
+    if all(p is not None for p in eye_patches):
+        flat = sorted(_flatness(p) for p in eye_patches)
+        if 0 <= flat[0] < 9 and flat[1] > 2.5 * max(flat[0], 4.0):
+            issues.append("eyes_covered")
+    cheeks = [_region(bgr, re[0] - 0.1 * d, re[1] + 0.75 * d, 0.4 * d, 0.4 * d), _region(bgr, le[0] + 0.1 * d, le[1] + 0.75 * d, 0.4 * d, 0.4 * d)]
+    if all(c is not None for c in cheeks) and "covered" not in issues:
+        ratios = [_skin_ratio(c) for c in cheeks]
+        hidden = int(np.argmin(ratios))
+        if max(ratios) >= 0.6 and min(ratios) < 0.15:
+            b_hidden, b_seen = _brightness(cheeks[hidden]), _brightness(cheeks[1 - hidden])
+            if _flatness(cheeks[hidden]) < 8 or b_hidden < 0.45 * b_seen or b_hidden > 1.6 * b_seen:
+                issues.append("covered")
     return issues
 
 

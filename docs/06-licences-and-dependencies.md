@@ -11,6 +11,7 @@ All components below permit commercial, self-hosted use. No paid or cloud biomet
 | SFace (2021dec, fallback) | 128-d face embedding | OpenCV Zoo `face_recognition_sface` | Apache-2.0 | `face_recognition_sface_2021dec.onnx` | `0ba9fbfa…c34e79` |
 | MiniFASNet V1SE (scale 4.0) | Passive presentation-attack detection | minivision-ai `Silent-Face-Anti-Spoofing` | Apache-2.0 | `minifasnet_v1se_4.0_80x80.onnx` (exported from `4_0_0_80x80_MiniFASNetV1SE.pth`, SHA-256 `84ee1d37…c5f5990`) | generated |
 | MiniFASNet V2 (scale 2.7) | Passive presentation-attack detection | minivision-ai `Silent-Face-Anti-Spoofing` | Apache-2.0 | `minifasnet_v2_2.7_80x80.onnx` (exported from `2.7_80x80_MiniFASNetV2.pth`, SHA-256 `a5eb02e1…99bec0`) | generated |
+| anti-spoof-mn3 | Photo / screen replay detection | Intel Open Model Zoo (`models/public/anti-spoof-mn3`, trained on CelebA-Spoof) | MIT | `anti-spoof-mn3.onnx` (SHA-384 matches the OMZ `model.yml`: `6de45349…f92a`) | `c4c99af0…bb3262` |
 
 Notes
 - The ONNX export of MiniFASNet uses FaceGate's own network definition (`backend/tools/export_pad_onnx.py`); the vendor's Python module is kept only for reference under `backend/tools/third_party/minifasnet/` with its Apache-2.0 LICENSE.

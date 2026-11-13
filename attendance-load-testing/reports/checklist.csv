@@ -1,0 +1,15 @@
+Check,Result,Evidence
+Accuracy pass completed,PASS,
+All ten load tests completed,PASS,"8 staged tests, burst yes, sustained yes"
+No wrong identity in any stage,FAIL,8 under load
+No non-enrolled person accepted,FAIL,
+No duplicate attendance records,PASS,"3,336 stored events checked"
+No attendance stored for the wrong employee,PASS,
+Stored attendance consistent with API responses in every stage,PASS,
+Correct recognition >= 99% (accuracy pass),FAIL,88.22%
+500 users: every recognition reaches a verdict (<= 1% without),FAIL,"358 without verdict, 20 server timeouts"
+500 users: p95 time to a correct match <= 2000 ms,FAIL,"78,039 ms"
+500-user synchronised burst passes,FAIL,"requests without an answer / timeouts / server errors, p95 > 2000 ms"
+500-user sustained load passes,FAIL,"integrity, requests without an answer / timeouts / server errors, p95 > 2000 ms"
+API healthy after every stage,PASS,
+Server stayed responsive during load (no deadlock or frozen event loop),FAIL,"1,670 of 1,713 once-a-second health probes answered while the stages ran; slowest 9,936 ms"

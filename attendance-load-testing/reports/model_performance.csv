@@ -1,0 +1,23 @@
+Metric,Actual result,Target,Status,Basis
+Correct recognition rate (unseen probe photos),88.22%,>= 99%,FAIL,1183 of 1341 genuine attempts with a verdict
+Incorrect identification rate,0.075%,0 (as low as possible),FAIL,1 matched to another employee
+False acceptance rate (not enrolled),1.667%,<= 0.1%,FAIL,3 of 180 non-enrolled inputs identified
+False rejection rate,11.71%,<= 1%,FAIL,157 genuine attempts refused
+  of which refused by the quality gate (photo unusable),7.08%,INFO,INFO,"multiple_faces 43, not_frontal 37, quality 14, no_face 1: a second face in the photograph, or a face turned away / too soft for the gate"
+  of which not recognised by the model,4.62%,INFO,INFO,"unknown 48, spoof 11, ambiguous 3"
+Correct recognition rate on photos the quality gate accepted,94.94%,>= 99%,FAIL,1183 of 1246
+Unknown-face rejection,97.00%,100% on test dataset,FAIL,"{'correct_reject': 97, 'false_accept': 3}"
+No-face rejection,100.00%,100% on test dataset,PASS,{'correct_reject': 40}
+Two-equal-faces rejection,100.00%,100% on test dataset,PASS,{'correct_reject': 40}
+Precision / recall / F1,99.71% / 84.46% / 91.45%,model-dependent,INFO,"over identifications, all input types of the accuracy pass"
+Average match score of correct matches,0.699,model-dependent,INFO,"cosine similarity, not a probability; lowest 0.452, accept threshold 0.45"
+Wrong identifications in the accuracy pass,4,0,FAIL,"U056 -> LT0245 (score 0.525, runner-up 0.401); U037 -> LT0246 (score 0.475, runner-up 0.294); LT0227 -> LT0506 (score 0.467, runner-up 0.325); U067 -> LT0716 (score 0.456, runner-up 0.332)"
+Highest score offered by a non-enrolled face,0.525,below the accept threshold,INFO,best gallery match for people who are not enrolled
+P95 model time per frame (server-reported),98 ms,INFO,INFO,median 68 ms; a verdict needs a median of 5 frames
+P95 time to a correct match at low load,"1,142 ms",<= 2000 ms,PASS,"session request to verdict, 8 concurrent users; median 657 ms"
+"Correct recognition, dark frames",74.00%,INFO,INFO,"{'correct': 74, 'rejected': 26} of 100"
+"Correct recognition, bright frames",88.00%,INFO,INFO,"{'correct': 88, 'rejected': 12} of 100"
+"Correct recognition, blur frames",41.00%,INFO,INFO,"{'correct': 41, 'rejected': 59} of 100"
+Wrong identity under load (all load stages),8,0,FAIL,"against 8,820 correct identifications"
+Duplicate attendance records,0,0,PASS,"database check over 3,336 stored events"
+Incorrect attendance mapping,0,0,PASS,stored employee differs from the person who scanned

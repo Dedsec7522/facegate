@@ -1,0 +1,764 @@
+Expected identity,Predicted identity,Count
+(not enrolled: unknown),LT0245,6
+(not enrolled: unknown),LT0246,1
+(not enrolled: unknown),LT0716,4
+LT0003,(no verdict),12
+LT0005,(no verdict),9
+LT0008,(no verdict),12
+LT0008,(rejected),2
+LT0012,(no verdict),14
+LT0013,(no verdict),19
+LT0014,(no verdict),15
+LT0014,(rejected),1
+LT0015,(no verdict),16
+LT0015,(rejected),3
+LT0016,(no verdict),20
+LT0018,(no verdict),13
+LT0018,(rejected),9
+LT0019,(no verdict),22
+LT0020,(no verdict),30
+LT0020,(rejected),2
+LT0022,(no verdict),26
+LT0022,(rejected),8
+LT0023,(no verdict),24
+LT0025,(no verdict),21
+LT0025,(rejected),1
+LT0026,(no verdict),16
+LT0026,(rejected),1
+LT0027,(no verdict),20
+LT0028,(no verdict),15
+LT0029,(no verdict),29
+LT0029,(rejected),1
+LT0030,(no verdict),16
+LT0030,(rejected),6
+LT0032,(no verdict),14
+LT0033,(no verdict),23
+LT0033,(rejected),1
+LT0034,(no verdict),21
+LT0034,(rejected),1
+LT0035,(no verdict),12
+LT0036,(no verdict),23
+LT0037,(no verdict),23
+LT0037,(rejected),1
+LT0038,(no verdict),15
+LT0038,(rejected),1
+LT0045,(no verdict),10
+LT0048,(no verdict),8
+LT0048,(rejected),1
+LT0049,(no verdict),26
+LT0049,(rejected),1
+LT0050,(no verdict),12
+LT0057,(no verdict),26
+LT0057,(rejected),1
+LT0060,(no verdict),39
+LT0062,(no verdict),28
+LT0062,(rejected),1
+LT0063,(no verdict),19
+LT0064,(no verdict),17
+LT0064,(rejected),1
+LT0065,(no verdict),25
+LT0065,(rejected),1
+LT0067,(no verdict),16
+LT0067,(rejected),1
+LT0068,(no verdict),14
+LT0068,(rejected),12
+LT0070,(no verdict),19
+LT0074,(no verdict),33
+LT0074,(rejected),1
+LT0076,(no verdict),19
+LT0076,(rejected),1
+LT0078,(no verdict),20
+LT0078,(rejected),2
+LT0079,(no verdict),16
+LT0079,(rejected),23
+LT0080,(no verdict),26
+LT0080,(rejected),3
+LT0083,(no verdict),17
+LT0084,(no verdict),28
+LT0084,(rejected),2
+LT0089,(no verdict),15
+LT0089,(rejected),1
+LT0090,(no verdict),13
+LT0090,(rejected),3
+LT0095,(no verdict),32
+LT0095,(rejected),1
+LT0096,(no verdict),20
+LT0096,(rejected),1
+LT0100,(no verdict),20
+LT0100,(rejected),6
+LT0102,(no verdict),24
+LT0102,(rejected),1
+LT0103,(no verdict),17
+LT0103,(rejected),2
+LT0106,(no verdict),18
+LT0106,(rejected),5
+LT0110,(no verdict),14
+LT0113,(no verdict),13
+LT0114,(no verdict),23
+LT0114,(rejected),2
+LT0117,(no verdict),23
+LT0117,(rejected),2
+LT0120,(no verdict),11
+LT0120,(rejected),1
+LT0122,(no verdict),23
+LT0123,(no verdict),7
+LT0125,(no verdict),15
+LT0125,(rejected),1
+LT0126,(no verdict),18
+LT0126,(rejected),1
+LT0128,(no verdict),22
+LT0128,(rejected),1
+LT0134,(no verdict),13
+LT0134,(rejected),1
+LT0136,(no verdict),26
+LT0136,(rejected),1
+LT0137,(no verdict),12
+LT0137,(rejected),1
+LT0138,(no verdict),11
+LT0139,(no verdict),36
+LT0139,(rejected),1
+LT0141,(no verdict),21
+LT0141,(rejected),6
+LT0143,(no verdict),11
+LT0143,(rejected),1
+LT0145,(no verdict),23
+LT0147,(no verdict),16
+LT0147,(rejected),2
+LT0148,(no verdict),26
+LT0148,(rejected),1
+LT0150,(no verdict),35
+LT0153,(no verdict),19
+LT0157,(no verdict),16
+LT0157,(rejected),1
+LT0158,(no verdict),17
+LT0158,(rejected),5
+LT0159,(no verdict),19
+LT0160,(no verdict),21
+LT0161,(no verdict),13
+LT0162,(no verdict),18
+LT0162,(rejected),1
+LT0163,(no verdict),26
+LT0163,(rejected),11
+LT0164,(no verdict),18
+LT0166,(no verdict),25
+LT0166,(rejected),1
+LT0168,(no verdict),22
+LT0168,(rejected),17
+LT0169,(no verdict),23
+LT0171,(no verdict),10
+LT0172,(no verdict),22
+LT0172,(rejected),1
+LT0173,(no verdict),25
+LT0175,(no verdict),25
+LT0176,(no verdict),22
+LT0176,(rejected),2
+LT0177,(no verdict),10
+LT0177,(rejected),1
+LT0178,(no verdict),22
+LT0180,(no verdict),15
+LT0181,(no verdict),11
+LT0182,(no verdict),19
+LT0185,(no verdict),6
+LT0185,(rejected),1
+LT0188,(no verdict),18
+LT0189,(no verdict),15
+LT0190,(no verdict),11
+LT0190,(rejected),3
+LT0191,(no verdict),13
+LT0191,(rejected),1
+LT0192,(no verdict),27
+LT0192,(rejected),2
+LT0193,(no verdict),7
+LT0196,(no verdict),29
+LT0197,(no verdict),17
+LT0199,(no verdict),17
+LT0199,(rejected),1
+LT0201,(no verdict),16
+LT0202,(no verdict),15
+LT0202,(rejected),1
+LT0204,(no verdict),17
+LT0204,(rejected),2
+LT0206,(no verdict),26
+LT0207,(no verdict),13
+LT0208,(no verdict),20
+LT0208,(rejected),1
+LT0211,(no verdict),11
+LT0211,(rejected),1
+LT0212,(no verdict),23
+LT0212,(rejected),18
+LT0213,(no verdict),18
+LT0214,(no verdict),20
+LT0216,(no verdict),11
+LT0217,(no verdict),22
+LT0222,(no verdict),9
+LT0222,(rejected),1
+LT0224,(no verdict),17
+LT0225,(no verdict),21
+LT0226,(no verdict),14
+LT0227,(no verdict),26
+LT0227,(rejected),2
+LT0227,LT0506,1
+LT0230,(no verdict),33
+LT0232,(no verdict),30
+LT0232,(rejected),18
+LT0233,(no verdict),17
+LT0233,(rejected),12
+LT0234,(no verdict),15
+LT0237,(no verdict),16
+LT0238,(no verdict),18
+LT0239,(no verdict),16
+LT0239,(rejected),1
+LT0243,(no verdict),34
+LT0245,(no verdict),18
+LT0245,(rejected),1
+LT0246,(no verdict),20
+LT0246,(rejected),1
+LT0248,(no verdict),16
+LT0249,(no verdict),17
+LT0252,(no verdict),16
+LT0252,(rejected),1
+LT0253,(no verdict),16
+LT0253,(rejected),10
+LT0257,(no verdict),13
+LT0257,(rejected),1
+LT0258,(no verdict),9
+LT0258,(rejected),1
+LT0261,(no verdict),14
+LT0263,(no verdict),15
+LT0264,(no verdict),13
+LT0264,(rejected),1
+LT0266,(no verdict),25
+LT0269,(no verdict),25
+LT0269,(rejected),1
+LT0271,(no verdict),21
+LT0271,(rejected),1
+LT0272,(no verdict),20
+LT0273,(no verdict),12
+LT0273,(rejected),2
+LT0275,(no verdict),15
+LT0277,(no verdict),26
+LT0279,(no verdict),19
+LT0280,(no verdict),24
+LT0282,(no verdict),35
+LT0282,(rejected),7
+LT0283,(no verdict),12
+LT0283,(rejected),2
+LT0284,(no verdict),16
+LT0284,(rejected),3
+LT0285,(no verdict),13
+LT0285,(rejected),4
+LT0286,(no verdict),23
+LT0287,(no verdict),22
+LT0287,(rejected),8
+LT0288,(no verdict),9
+LT0288,(rejected),3
+LT0289,(no verdict),20
+LT0289,(rejected),2
+LT0290,(no verdict),8
+LT0290,(rejected),1
+LT0292,(no verdict),25
+LT0293,(no verdict),16
+LT0293,(rejected),1
+LT0294,(no verdict),13
+LT0294,(rejected),1
+LT0296,(no verdict),31
+LT0299,(no verdict),19
+LT0302,(no verdict),13
+LT0302,(rejected),1
+LT0307,(no verdict),25
+LT0309,(no verdict),22
+LT0310,(no verdict),14
+LT0312,(no verdict),8
+LT0312,(rejected),1
+LT0313,(no verdict),16
+LT0314,(no verdict),18
+LT0314,(rejected),1
+LT0316,(no verdict),23
+LT0318,(no verdict),26
+LT0318,(rejected),1
+LT0319,(no verdict),13
+LT0319,(rejected),1
+LT0321,(no verdict),22
+LT0322,(no verdict),20
+LT0323,(no verdict),16
+LT0323,(rejected),1
+LT0324,(no verdict),23
+LT0325,(no verdict),24
+LT0325,(rejected),9
+LT0326,(no verdict),18
+LT0326,(rejected),1
+LT0327,(no verdict),23
+LT0328,(no verdict),20
+LT0328,(rejected),1
+LT0329,(no verdict),8
+LT0329,(rejected),4
+LT0330,(no verdict),12
+LT0335,(no verdict),22
+LT0336,(no verdict),10
+LT0336,(rejected),1
+LT0337,(no verdict),19
+LT0337,(rejected),1
+LT0339,(no verdict),25
+LT0339,(rejected),17
+LT0340,(no verdict),25
+LT0342,(no verdict),12
+LT0343,(no verdict),24
+LT0343,(rejected),1
+LT0347,(no verdict),26
+LT0348,(no verdict),28
+LT0348,(rejected),10
+LT0349,(no verdict),16
+LT0349,(rejected),1
+LT0350,(no verdict),26
+LT0351,(no verdict),15
+LT0351,(rejected),4
+LT0352,(no verdict),18
+LT0354,(no verdict),23
+LT0358,(no verdict),21
+LT0360,(no verdict),25
+LT0362,(no verdict),14
+LT0362,(rejected),1
+LT0363,(no verdict),24
+LT0364,(no verdict),14
+LT0364,(rejected),2
+LT0365,(no verdict),9
+LT0365,(rejected),18
+LT0367,(no verdict),16
+LT0371,(no verdict),9
+LT0372,(no verdict),17
+LT0372,(rejected),1
+LT0373,(no verdict),19
+LT0374,(no verdict),19
+LT0375,(no verdict),20
+LT0376,(no verdict),5
+LT0379,(no verdict),11
+LT0381,(no verdict),27
+LT0381,(rejected),1
+LT0382,(no verdict),22
+LT0382,(rejected),3
+LT0383,(no verdict),8
+LT0385,(no verdict),16
+LT0385,(rejected),1
+LT0387,(no verdict),18
+LT0387,(rejected),2
+LT0388,(no verdict),15
+LT0388,(rejected),4
+LT0389,(no verdict),12
+LT0389,(rejected),1
+LT0390,(no verdict),16
+LT0391,(no verdict),24
+LT0391,(rejected),2
+LT0392,(no verdict),27
+LT0392,(rejected),16
+LT0393,(no verdict),32
+LT0394,(no verdict),14
+LT0395,(no verdict),23
+LT0395,(rejected),5
+LT0396,(no verdict),14
+LT0397,(no verdict),17
+LT0398,(no verdict),23
+LT0401,(no verdict),37
+LT0402,(no verdict),10
+LT0402,(rejected),1
+LT0404,(no verdict),23
+LT0404,(rejected),15
+LT0405,(no verdict),14
+LT0405,(rejected),1
+LT0406,(no verdict),23
+LT0407,(no verdict),14
+LT0407,(rejected),4
+LT0408,(no verdict),12
+LT0409,(no verdict),25
+LT0410,(no verdict),26
+LT0410,(rejected),4
+LT0412,(no verdict),17
+LT0412,(rejected),1
+LT0413,(no verdict),24
+LT0415,(no verdict),11
+LT0416,(no verdict),22
+LT0417,(no verdict),13
+LT0417,(rejected),1
+LT0420,(no verdict),26
+LT0420,(rejected),1
+LT0421,(no verdict),10
+LT0422,(no verdict),7
+LT0423,(no verdict),24
+LT0425,(no verdict),12
+LT0426,(no verdict),21
+LT0427,(no verdict),21
+LT0427,(rejected),1
+LT0428,(no verdict),10
+LT0429,(no verdict),16
+LT0430,(no verdict),13
+LT0431,(no verdict),21
+LT0435,(no verdict),23
+LT0435,(rejected),1
+LT0439,(no verdict),20
+LT0440,(no verdict),17
+LT0440,(rejected),4
+LT0442,(no verdict),26
+LT0443,(no verdict),26
+LT0443,(rejected),1
+LT0445,(no verdict),10
+LT0446,(no verdict),27
+LT0446,(rejected),14
+LT0448,(no verdict),17
+LT0448,(rejected),1
+LT0449,(no verdict),20
+LT0450,(no verdict),16
+LT0452,(no verdict),24
+LT0453,(no verdict),8
+LT0453,(rejected),3
+LT0456,(no verdict),24
+LT0456,(rejected),2
+LT0459,(no verdict),26
+LT0461,(no verdict),20
+LT0461,(rejected),7
+LT0463,(no verdict),18
+LT0463,(rejected),1
+LT0464,(no verdict),17
+LT0464,(rejected),1
+LT0465,(no verdict),15
+LT0465,(rejected),2
+LT0466,(no verdict),19
+LT0467,(no verdict),26
+LT0467,(rejected),1
+LT0468,(no verdict),22
+LT0468,(rejected),1
+LT0470,(no verdict),10
+LT0472,(no verdict),24
+LT0473,(no verdict),23
+LT0473,(rejected),1
+LT0474,(no verdict),11
+LT0474,(rejected),1
+LT0475,(no verdict),13
+LT0475,(rejected),1
+LT0479,(no verdict),19
+LT0479,(rejected),5
+LT0480,(no verdict),12
+LT0481,(no verdict),19
+LT0481,(rejected),1
+LT0482,(no verdict),16
+LT0483,(no verdict),24
+LT0489,(no verdict),17
+LT0489,(rejected),1
+LT0493,(no verdict),13
+LT0494,(no verdict),21
+LT0494,(rejected),2
+LT0496,(no verdict),18
+LT0496,(rejected),1
+LT0497,(no verdict),18
+LT0498,(no verdict),16
+LT0499,(no verdict),21
+LT0499,(rejected),2
+LT0500,(no verdict),21
+LT0500,(rejected),3
+LT0501,(no verdict),18
+LT0501,(rejected),1
+LT0503,(no verdict),24
+LT0503,(rejected),1
+LT0505,(no verdict),23
+LT0506,(no verdict),25
+LT0507,(no verdict),5
+LT0510,(no verdict),25
+LT0510,(rejected),1
+LT0511,(no verdict),14
+LT0512,(no verdict),16
+LT0514,(no verdict),25
+LT0515,(no verdict),21
+LT0516,(no verdict),15
+LT0516,(rejected),5
+LT0522,(no verdict),12
+LT0523,(no verdict),23
+LT0524,(no verdict),26
+LT0524,(rejected),5
+LT0527,(no verdict),13
+LT0527,(rejected),1
+LT0531,(no verdict),19
+LT0534,(no verdict),13
+LT0534,(rejected),2
+LT0535,(no verdict),19
+LT0536,(no verdict),20
+LT0536,(rejected),1
+LT0538,(no verdict),19
+LT0538,(rejected),1
+LT0539,(no verdict),21
+LT0540,(no verdict),16
+LT0540,(rejected),2
+LT0542,(no verdict),20
+LT0542,(rejected),1
+LT0544,(no verdict),18
+LT0545,(no verdict),17
+LT0546,(no verdict),15
+LT0547,(no verdict),10
+LT0547,(rejected),1
+LT0548,(no verdict),15
+LT0548,(rejected),1
+LT0550,(no verdict),17
+LT0551,(no verdict),27
+LT0552,(no verdict),18
+LT0552,(rejected),1
+LT0556,(no verdict),15
+LT0559,(no verdict),22
+LT0564,(no verdict),15
+LT0565,(no verdict),20
+LT0567,(no verdict),12
+LT0568,(no verdict),15
+LT0568,(rejected),1
+LT0569,(no verdict),25
+LT0570,(no verdict),21
+LT0571,(no verdict),13
+LT0572,(no verdict),18
+LT0572,(rejected),2
+LT0574,(no verdict),20
+LT0575,(no verdict),20
+LT0575,(rejected),1
+LT0576,(no verdict),27
+LT0577,(no verdict),10
+LT0577,(rejected),1
+LT0578,(no verdict),28
+LT0582,(no verdict),24
+LT0582,(rejected),4
+LT0585,(no verdict),17
+LT0585,(rejected),1
+LT0588,(no verdict),12
+LT0588,(rejected),1
+LT0590,(no verdict),13
+LT0594,(no verdict),19
+LT0594,(rejected),1
+LT0595,(no verdict),23
+LT0595,(rejected),1
+LT0596,(no verdict),20
+LT0596,(rejected),1
+LT0597,(no verdict),29
+LT0599,(no verdict),14
+LT0600,(no verdict),14
+LT0601,(no verdict),19
+LT0601,(rejected),1
+LT0603,(no verdict),10
+LT0603,(rejected),4
+LT0604,(no verdict),28
+LT0604,(rejected),1
+LT0607,(no verdict),14
+LT0608,(no verdict),19
+LT0608,(rejected),1
+LT0609,(no verdict),13
+LT0611,(no verdict),26
+LT0611,(rejected),1
+LT0612,(no verdict),20
+LT0613,(no verdict),25
+LT0613,(rejected),8
+LT0614,(no verdict),15
+LT0618,(no verdict),18
+LT0622,(no verdict),30
+LT0623,(no verdict),18
+LT0623,(rejected),1
+LT0624,(no verdict),18
+LT0624,(rejected),7
+LT0626,(no verdict),17
+LT0627,(no verdict),16
+LT0629,(no verdict),23
+LT0629,(rejected),1
+LT0632,(no verdict),14
+LT0632,(rejected),2
+LT0634,(no verdict),16
+LT0634,(rejected),7
+LT0636,(no verdict),24
+LT0640,(no verdict),17
+LT0640,(rejected),1
+LT0641,(no verdict),15
+LT0642,(no verdict),18
+LT0642,(rejected),1
+LT0643,(no verdict),35
+LT0643,(rejected),3
+LT0644,(no verdict),9
+LT0644,(rejected),1
+LT0645,(no verdict),24
+LT0645,(rejected),1
+LT0647,(no verdict),13
+LT0647,(rejected),2
+LT0649,(no verdict),22
+LT0649,(rejected),3
+LT0651,(no verdict),16
+LT0651,(rejected),8
+LT0652,(no verdict),25
+LT0652,(rejected),13
+LT0653,(no verdict),14
+LT0655,(no verdict),30
+LT0659,(no verdict),20
+LT0659,(rejected),1
+LT0660,(no verdict),14
+LT0660,(rejected),1
+LT0661,(no verdict),13
+LT0662,(no verdict),6
+LT0663,(no verdict),15
+LT0663,(rejected),1
+LT0664,(no verdict),12
+LT0664,(rejected),7
+LT0665,(no verdict),18
+LT0665,(rejected),1
+LT0667,(no verdict),12
+LT0667,(rejected),1
+LT0669,(no verdict),16
+LT0669,(rejected),1
+LT0670,(no verdict),26
+LT0671,(no verdict),21
+LT0671,(rejected),1
+LT0673,(no verdict),18
+LT0674,(no verdict),15
+LT0674,(rejected),2
+LT0675,(no verdict),15
+LT0675,(rejected),1
+LT0678,(no verdict),17
+LT0681,(no verdict),20
+LT0682,(no verdict),14
+LT0682,(rejected),1
+LT0683,(no verdict),21
+LT0684,(no verdict),13
+LT0684,(rejected),3
+LT0686,(no verdict),17
+LT0686,(rejected),1
+LT0687,(no verdict),24
+LT0687,(rejected),1
+LT0688,(no verdict),26
+LT0689,(no verdict),19
+LT0690,(no verdict),11
+LT0691,(no verdict),24
+LT0692,(no verdict),10
+LT0693,(no verdict),7
+LT0694,(no verdict),11
+LT0695,(no verdict),15
+LT0697,(no verdict),14
+LT0698,(no verdict),16
+LT0701,(no verdict),13
+LT0702,(no verdict),15
+LT0702,(rejected),1
+LT0703,(no verdict),19
+LT0705,(no verdict),11
+LT0706,(no verdict),15
+LT0706,(rejected),5
+LT0707,(no verdict),8
+LT0707,(rejected),1
+LT0709,(no verdict),21
+LT0709,(rejected),2
+LT0711,(no verdict),22
+LT0716,(no verdict),18
+LT0720,(no verdict),23
+LT0724,(no verdict),8
+LT0724,(rejected),4
+LT0726,(no verdict),22
+LT0726,(rejected),1
+LT0727,(no verdict),17
+LT0728,(no verdict),18
+LT0729,(no verdict),25
+LT0729,(rejected),1
+LT0732,(no verdict),17
+LT0732,(rejected),1
+LT0733,(no verdict),21
+LT0734,(no verdict),21
+LT0734,(rejected),6
+LT0735,(no verdict),11
+LT0736,(no verdict),15
+LT0736,(rejected),2
+LT0737,(no verdict),24
+LT0739,(no verdict),22
+LT0739,(rejected),1
+LT0740,(no verdict),14
+LT0740,(rejected),1
+LT0741,(no verdict),15
+LT0741,(rejected),1
+LT0744,(no verdict),20
+LT0750,(no verdict),19
+LT0755,(no verdict),10
+LT0756,(no verdict),10
+LT0757,(no verdict),21
+LT0758,(no verdict),22
+LT0758,(rejected),2
+LT0759,(no verdict),15
+LT0759,(rejected),7
+LT0761,(no verdict),21
+LT0762,(no verdict),11
+LT0762,(rejected),1
+LT0763,(no verdict),24
+LT0763,(rejected),1
+LT0765,(no verdict),20
+LT0766,(no verdict),18
+LT0766,(rejected),1
+LT0767,(no verdict),21
+LT0772,(no verdict),28
+LT0772,(rejected),6
+LT0773,(no verdict),13
+LT0773,(rejected),1
+LT0775,(no verdict),10
+LT0776,(no verdict),13
+LT0776,(rejected),1
+LT0777,(no verdict),23
+LT0777,(rejected),12
+LT0779,(no verdict),13
+LT0780,(no verdict),15
+LT0780,(rejected),13
+LT0781,(no verdict),18
+LT0784,(no verdict),15
+LT0784,(rejected),1
+LT0785,(no verdict),19
+LT0785,(rejected),1
+LT0786,(no verdict),6
+LT0786,(rejected),1
+LT0788,(no verdict),22
+LT0789,(no verdict),14
+LT0789,(rejected),4
+LT0790,(no verdict),13
+LT0791,(no verdict),20
+LT0791,(rejected),1
+LT0793,(no verdict),22
+LT0793,(rejected),1
+LT0794,(no verdict),16
+LT0795,(no verdict),16
+LT0798,(no verdict),25
+LT0798,(rejected),1
+LT0799,(no verdict),18
+LT0801,(no verdict),15
+LT0802,(no verdict),24
+LT0803,(no verdict),11
+LT0803,(rejected),1
+LT0804,(no verdict),24
+LT0805,(no verdict),7
+LT0807,(no verdict),13
+LT0807,(rejected),1
+LT0816,(no verdict),17
+LT0816,(rejected),1
+LT0821,(no verdict),11
+LT0821,(rejected),1
+LT0822,(no verdict),15
+LT0822,(rejected),1
+LT0825,(no verdict),13
+LT0825,(rejected),1
+LT0826,(no verdict),17
+LT0826,(rejected),1
+LT0829,(no verdict),7
+LT0831,(no verdict),27
+LT0832,(no verdict),25
+LT0833,(no verdict),19
+LT0833,(rejected),1
+LT0835,(no verdict),12
+LT0836,(no verdict),23
+LT0837,(no verdict),9
+LT0837,(rejected),1
+LT0839,(no verdict),28
+LT0841,(no verdict),14
+LT0841,(rejected),3
+LT0843,(no verdict),21
+LT0844,(no verdict),33
+LT0847,(no verdict),25
+LT0847,(rejected),2
+LT0848,(no verdict),35
+LT0849,(no verdict),19
+LT0849,(rejected),1
+LT0850,(no verdict),17
+LT0850,(rejected),1
+LT0851,(no verdict),8
+LT0851,(rejected),3
+LT0853,(no verdict),23
+LT0853,(rejected),4
+LT0855,(no verdict),12
+LT0856,(no verdict),16

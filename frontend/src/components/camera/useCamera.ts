@@ -11,12 +11,48 @@ export function useCamera(active: boolean, opts: { width?: number; height?: numb
   const [error, setError] = useState<string | null>(null)
   const [size, setSize] = useState({ width: 0, height: 0 })
 
+  const restoreRef = useRef<(() => void) | null>(null)
+
+  /** Undo `boostLowLight`. Webcam drivers remember exposure and brightness, so they are put back after every scan. */
+  const resetLowLight = useCallback(() => {
+    restoreRef.current?.()
+    restoreRef.current = null
+  }, [])
+
+  /**
+   * Ask the webcam for a brighter picture: continuous auto-exposure, then exposure compensation and brightness raised
+   * most of the way to what the camera reports as its maximum. Only Chromium exposes these controls and only some
+   * cameras support them; returns false when nothing could be changed.
+   */
+  const boostLowLight = useCallback(async (): Promise<boolean> => {
+    const track = streamRef.current?.getVideoTracks()[0]
+    if (!track || typeof track.getCapabilities !== 'function' || restoreRef.current) return false
+    type Range = { min: number; max: number }
+    const caps = track.getCapabilities() as MediaTrackCapabilities & { exposureCompensation?: Range; brightness?: Range; exposureMode?: string[] }
+    const now = track.getSettings() as MediaTrackSettings & { exposureCompensation?: number; brightness?: number }
+    const want: Record<string, unknown> = {}
+    const back: Record<string, unknown> = {}
+    if (caps.exposureMode?.includes('continuous')) want.exposureMode = 'continuous'
+    for (const k of ['exposureCompensation', 'brightness'] as const) {
+      const range = caps[k]
+      const cur = now[k]
+      if (range && typeof cur === 'number' && range.max > cur) { want[k] = cur + (range.max - cur) * 0.7; back[k] = cur }
+    }
+    if (!Object.keys(want).length) return false
+    try { await track.applyConstraints({ advanced: [want] } as MediaTrackConstraints) } catch { return false }
+    restoreRef.current = () => {
+      if (Object.keys(back).length && track.readyState === 'live') void track.applyConstraints({ advanced: [back] } as MediaTrackConstraints).catch(() => undefined)
+    }
+    return true
+  }, [])
+
   const stop = useCallback(() => {
+    resetLowLight()
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
     if (videoRef.current) videoRef.current.srcObject = null
     setStatus('idle')
-  }, [])
+  }, [resetLowLight])
 
   useEffect(() => {
     if (!active) { stop(); return }
@@ -66,5 +102,5 @@ export function useCamera(active: boolean, opts: { width?: number; height?: numb
     return new Promise((res) => c.toBlob(res, 'image/jpeg', quality))
   }, [])
 
-  return { videoRef, status, error, size, grabFrame, stop }
+  return { videoRef, status, error, size, grabFrame, stop, boostLowLight, resetLowLight }
 }

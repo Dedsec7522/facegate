@@ -244,6 +244,8 @@ export interface FrameFeedback {
   quality?: number | null
   timings_ms?: Record<string, number>
   liveness?: { frames: number; needed?: number; score: number; passed: boolean; low?: boolean }
+  /** Replay detector: probability that this is a real face rather than a photo or a screen (median so far). */
+  replay?: { frames: number; score: number | null; suspected: boolean }
   challenge?: { name: string | null; state: 'pending' | 'turned' | 'passed' | 'failed'; text: string }
   yaw?: number
   pitch?: number

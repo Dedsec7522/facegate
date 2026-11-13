@@ -41,7 +41,8 @@ backend/
   app/services/             attendance engine, enrolment, verification SessionManager, index, audit, org_settings
   app/vision/               detector (YuNet), align, quality, embedder (Intel 0095 on OpenVINO; SFace fallback), pad (MiniFASNet), matcher, pipeline
   models/                   committed weights: YuNet (MIT), face-reidentification-retail-0095 .xml/.bin (Apache-2.0),
-                            SFace (Apache-2.0, fallback), MiniFASNet V1SE + V2 (Apache-2.0)
+                            SFace (Apache-2.0, fallback), MiniFASNet V1SE + V2 (Apache-2.0),
+                            anti-spoof-mn3 (MIT, Open Model Zoo; replay detector)
   tools/seed.py             admin/demo seeding;  tools/export_pad_onnx.py  one-off torch→ONNX export
   tests/                    pytest (SQLite via aiosqlite); benchmarks/ latency, 300-client load test, locustfile.py (mixed Locust test)
 frontend/
@@ -89,10 +90,33 @@ docs/01–07                  architecture, design system, security, test/benchm
   `others` with box + identity (one embedding each, no PAD) and, on the attendance stream, name / `signed_in` / `since`
   from a per-session cache (`_enrich_others`). Only a second face within `PRIMARY_FACE_MARGIN` (0.85) of the subject's
   size refuses the frame (`multiple_faces`: "step closer"). Bystanders are never checked in.
+- **Replay detector** (`pad.replay_real_prob`, `REPLAY_CHECK`): Intel OMZ `anti-spoof-mn3` (MIT, trained on CelebA-Spoof)
+  scores every frame next to MiniFASNet (~7 ms, no extra frames, no head turn). A session whose median "real" probability is
+  below `REPLAY_SPOOF_THRESHOLD` (0.30) after 3 frontal frames is rejected with reason `replay` under EVERY liveness policy,
+  advisory included. Added because MiniFASNet scored a phone-screen photo in a dark room 0.80 live. Genuine LFW photos: 0.8 %
+  of frames below 0.45 (MiniFASNet 8.5 %). It reads under-exposed faces as spoofs, so crops with mean < 90 are brightened
+  first (never dim a bright crop: that makes real faces look fake). Not yet validated on live replays; both scores are logged
+  per verdict (`verify attendance: ... liveness= replay_real=`) for tuning.
+- **Low light**: the server still refuses a face darker than 40. Kiosk and portal respond with `FillLight` (white screen
+  border as a lamp) and `useCamera.boostLowLight` (exposure/brightness constraints where the webcam exposes them, restored after).
+- **Inference admission** (`pipeline.Admission`): a frame waits up to `BUSY_HOLD_SECONDS` (1.0) for a slot instead of an
+  instant "busy" (kiosks re-send immediately, which flooded the event loop); waiters with more collected evidence go first.
 - **Partial covering** is a colour heuristic, not a trained model (`quality.occlusion`): nose + lip patches not
   skin-toned while a forehead/bridge/temple patch is → `covered`; both eye patches far darker than it AND flat (std < 22: a real eye keeps sclera/iris contrast) → `eyes_covered`
   (LFW: 1.1 % false flags vs 8.9 % on darkness alone; 97 % of drawn sunglasses caught);
   silent when no reference patch is skin-toned. `FrameAlerts` renders it as an error in kiosk, portal and enrolment.
+  `_partial_cover` adds three rules: lips + chin non-skin but bright (mask worn low) → `covered`; one eye patch flat while
+  the other is not → `eyes_covered`; one cheek skin, the other not → `covered`. Synthetic covers accepted: mask 1–2 %,
+  low mask 12 %, one eye 4–6 %, half face 14–16 %; uncovered frames flagged 4 % (was 2 %). A skin-coloured cover (hand
+  over the mouth) is NOT caught (96 % accepted): do not claim otherwise.
+- **Load-test suite** (`attendance-load-testing/`, own README): Locust master + workers against a separate API on 8010
+  and Postgres container `facegate-loadtest-pg` (5544); never the dev DB. `tools/run_suite.py` runs the stages,
+  `validate_db.py` checks stored rows, `make_reports.py` writes `reports/`. Admin → *Locust load test*
+  (`pages/admin/LoadTest.tsx`) only embeds its dashboard (`VITE_LOADTEST_URL`, default :8089). Build frames in the gevent
+  threadpool, never on the worker loop (workers missed heartbeats and Locust stopped the run). Don't run pytest or other
+  CPU-heavy work while a stage is running. `reports/final_report.html` is the 12–13 Nov 2026 run, before the replay
+  detector and `Admission`; verdict there was NOT READY (only the 10-user stage met p95 2 s).
+- **Error pages** (`pages/errors/`): animated 404 / route-error screens wired in `app/router.tsx`.
 - **Time zone**: the organisation zone (Settings → Attendance rules, a country/region picker in `RegionPicker.tsx`
   over the offline table `lib/regions.ts`; no IP geolocation) is served publicly by `/api/health` and set into
   `lib/format.ts` (`setDisplayTimeZone`) at start-up, so every displayed time is organisation wall-clock, never the
@@ -120,7 +144,7 @@ Test accounts: `admin` / `Welcome123`; employees = lower-cased employee code / `
 
 ```bash
 # backend (Python 3.12+; a .venv already exists on the dev machine)
-cd backend && .venv/Scripts/python -m pytest -q          # must stay green (27 tests)
+cd backend && .venv/Scripts/python -m pytest -q          # must stay green (30 tests)
 .venv/Scripts/python -m uvicorn app.main:app --reload --reload-dir app --port 8000  # some dev machines use 8001 (frontend/.env.local)
 # frontend (Node 20+)
 cd frontend && npm run dev                                 # Vite on 5173, proxies /api → FACEGATE_API_URL or :8000

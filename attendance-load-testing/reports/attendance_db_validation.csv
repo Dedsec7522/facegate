@@ -1,0 +1,145 @@
+Stage,Check,Result,Failures,Examples,Note
+Accuracy pass,Every API-confirmed event is stored,PASS,0,,"0 confirmed by the API, 0 rows in attendance_events"
+Accuracy pass,Stored event belongs to the expected employee and action,PASS,0,,
+Accuracy pass,No attendance rows the test did not create,PASS,0,,
+Accuracy pass,Stored time equals the time the API returned,PASS,0,,
+Accuracy pass,Stored time is within 5 s of when the test made the request,PASS,0,,
+Accuracy pass,No duplicate check-in or check-out per employee,PASS,0,,0 employees with events
+Accuracy pass,No two events inside the 120s duplicate window,PASS,0,,
+Accuracy pass,Check-out is later than check-in,PASS,0,,
+Accuracy pass,One day-summary row per employee and day,PASS,0,,
+Accuracy pass,"Day summary agrees with the events (first in, last out, worked minutes, open flag)",PASS,0,,0 day rows
+Accuracy pass,Day summaries exist only for employees with events,PASS,0,,
+Accuracy pass,Verification log has a row for every verdict the test received,PASS,0,,"log 1390 / 180 (identified / rejected), test received 1390 / 180; 251 recognitions ended without an answer"
+Test 1 - 1 user,Every API-confirmed event is stored,PASS,0,,"2 confirmed by the API, 2 rows in attendance_events"
+Test 1 - 1 user,Stored event belongs to the expected employee and action,PASS,0,,
+Test 1 - 1 user,No attendance rows the test did not create,PASS,0,,
+Test 1 - 1 user,Stored time equals the time the API returned,PASS,0,,
+Test 1 - 1 user,Stored time lies between the test's attendance request and its response,PASS,0,,
+Test 1 - 1 user,No duplicate check-in or check-out per employee,PASS,0,,1 employees with events
+Test 1 - 1 user,No two events inside the 120s duplicate window,PASS,0,,
+Test 1 - 1 user,Check-out is later than check-in,PASS,0,,
+Test 1 - 1 user,One day-summary row per employee and day,PASS,0,,
+Test 1 - 1 user,"Day summary agrees with the events (first in, last out, worked minutes, open flag)",PASS,0,,1 day rows
+Test 1 - 1 user,Day summaries exist only for employees with events,PASS,0,,
+Test 1 - 1 user,Verification log has a row for every verdict the test received,PASS,0,,"log 4 / 0 (identified / rejected), test received 4 / 0; 0 recognitions ended without an answer"
+Test 2 - 10 users,Every API-confirmed event is stored,PASS,0,,"20 confirmed by the API, 20 rows in attendance_events"
+Test 2 - 10 users,Stored event belongs to the expected employee and action,PASS,0,,
+Test 2 - 10 users,No attendance rows the test did not create,PASS,0,,
+Test 2 - 10 users,Stored time equals the time the API returned,PASS,0,,
+Test 2 - 10 users,Stored time lies between the test's attendance request and its response,PASS,0,,
+Test 2 - 10 users,No duplicate check-in or check-out per employee,PASS,0,,10 employees with events
+Test 2 - 10 users,No two events inside the 120s duplicate window,PASS,0,,
+Test 2 - 10 users,Check-out is later than check-in,PASS,0,,
+Test 2 - 10 users,One day-summary row per employee and day,PASS,0,,
+Test 2 - 10 users,"Day summary agrees with the events (first in, last out, worked minutes, open flag)",PASS,0,,10 day rows
+Test 2 - 10 users,Day summaries exist only for employees with events,PASS,0,,
+Test 2 - 10 users,Verification log has a row for every verdict the test received,PASS,0,,"log 39 / 0 (identified / rejected), test received 39 / 0; 1 recognitions ended without an answer"
+Test 3 - 50 users,Every API-confirmed event is stored,PASS,0,,"96 confirmed by the API, 96 rows in attendance_events"
+Test 3 - 50 users,Stored event belongs to the expected employee and action,PASS,0,,
+Test 3 - 50 users,No attendance rows the test did not create,PASS,0,,
+Test 3 - 50 users,Stored time equals the time the API returned,PASS,0,,
+Test 3 - 50 users,Stored time lies between the test's attendance request and its response,PASS,0,,
+Test 3 - 50 users,No duplicate check-in or check-out per employee,PASS,0,,48 employees with events
+Test 3 - 50 users,No two events inside the 120s duplicate window,PASS,0,,
+Test 3 - 50 users,Check-out is later than check-in,PASS,0,,
+Test 3 - 50 users,One day-summary row per employee and day,PASS,0,,
+Test 3 - 50 users,"Day summary agrees with the events (first in, last out, worked minutes, open flag)",PASS,0,,48 day rows
+Test 3 - 50 users,Day summaries exist only for employees with events,PASS,0,,
+Test 3 - 50 users,Verification log has a row for every verdict the test received,PASS,0,,"log 189 / 4 (identified / rejected), test received 189 / 4; 3 recognitions ended without an answer"
+Test 4 - 100 users,Every API-confirmed event is stored,PASS,0,,"187 confirmed by the API, 187 rows in attendance_events"
+Test 4 - 100 users,Stored event belongs to the expected employee and action,PASS,0,,
+Test 4 - 100 users,No attendance rows the test did not create,PASS,0,,
+Test 4 - 100 users,Stored time equals the time the API returned,PASS,0,,
+Test 4 - 100 users,Stored time lies between the test's attendance request and its response,PASS,0,,
+Test 4 - 100 users,No duplicate check-in or check-out per employee,PASS,0,,95 employees with events
+Test 4 - 100 users,No two events inside the 120s duplicate window,PASS,0,,
+Test 4 - 100 users,Check-out is later than check-in,PASS,0,,
+Test 4 - 100 users,One day-summary row per employee and day,PASS,0,,
+Test 4 - 100 users,"Day summary agrees with the events (first in, last out, worked minutes, open flag)",PASS,0,,95 day rows
+Test 4 - 100 users,Day summaries exist only for employees with events,PASS,0,,
+Test 4 - 100 users,Verification log has a row for every verdict the test received,PASS,0,,"log 371 / 14 (identified / rejected), test received 371 / 14; 7 recognitions ended without an answer"
+Test 5 - 200 users,Every API-confirmed event is stored,PASS,0,,"372 confirmed by the API, 372 rows in attendance_events"
+Test 5 - 200 users,Stored event belongs to the expected employee and action,PASS,0,,
+Test 5 - 200 users,No attendance rows the test did not create,PASS,0,,
+Test 5 - 200 users,Stored time equals the time the API returned,PASS,0,,
+Test 5 - 200 users,Stored time lies between the test's attendance request and its response,PASS,0,,
+Test 5 - 200 users,No duplicate check-in or check-out per employee,PASS,0,,187 employees with events
+Test 5 - 200 users,No two events inside the 120s duplicate window,PASS,0,,
+Test 5 - 200 users,Check-out is later than check-in,PASS,0,,
+Test 5 - 200 users,One day-summary row per employee and day,PASS,0,,
+Test 5 - 200 users,"Day summary agrees with the events (first in, last out, worked minutes, open flag)",PASS,0,,187 day rows
+Test 5 - 200 users,Day summaries exist only for employees with events,PASS,0,,
+Test 5 - 200 users,Verification log has a row for every verdict the test received,PASS,0,,"log 736 / 28 (identified / rejected), test received 736 / 28; 11 recognitions ended without an answer"
+Test 6 - 300 users,Every API-confirmed event is stored,PASS,0,,"543 confirmed by the API, 543 rows in attendance_events"
+Test 6 - 300 users,Stored event belongs to the expected employee and action,PASS,0,,
+Test 6 - 300 users,No attendance rows the test did not create,PASS,0,,
+Test 6 - 300 users,Stored time equals the time the API returned,PASS,0,,
+Test 6 - 300 users,Stored time lies between the test's attendance request and its response,PASS,0,,
+Test 6 - 300 users,No duplicate check-in or check-out per employee,PASS,0,,274 employees with events
+Test 6 - 300 users,No two events inside the 120s duplicate window,PASS,0,,
+Test 6 - 300 users,Check-out is later than check-in,PASS,0,,
+Test 6 - 300 users,One day-summary row per employee and day,PASS,0,,
+Test 6 - 300 users,"Day summary agrees with the events (first in, last out, worked minutes, open flag)",PASS,0,,274 day rows
+Test 6 - 300 users,Day summaries exist only for employees with events,PASS,0,,
+Test 6 - 300 users,Verification log has a row for every verdict the test received,PASS,0,,"log 1074 / 47 (identified / rejected), test received 1074 / 47; 48 recognitions ended without an answer"
+Test 7 - 400 users,Every API-confirmed event is stored,PASS,0,,"599 confirmed by the API, 599 rows in attendance_events"
+Test 7 - 400 users,Stored event belongs to the expected employee and action,PASS,0,,
+Test 7 - 400 users,No attendance rows the test did not create,PASS,0,,
+Test 7 - 400 users,Stored time equals the time the API returned,PASS,0,,
+Test 7 - 400 users,Stored time lies between the test's attendance request and its response,PASS,0,,
+Test 7 - 400 users,No duplicate check-in or check-out per employee,PASS,0,,301 employees with events
+Test 7 - 400 users,No two events inside the 120s duplicate window,PASS,0,,
+Test 7 - 400 users,Check-out is later than check-in,PASS,0,,
+Test 7 - 400 users,One day-summary row per employee and day,PASS,0,,
+Test 7 - 400 users,"Day summary agrees with the events (first in, last out, worked minutes, open flag)",PASS,0,,301 day rows
+Test 7 - 400 users,Day summaries exist only for employees with events,PASS,0,,
+Test 7 - 400 users,Verification log has a row for every verdict the test received,PASS,0,,"log 1181 / 46 (identified / rejected), test received 1181 / 46; 266 recognitions ended without an answer"
+Test 8 - 500 users,Every API-confirmed event is stored,PASS,0,,"749 confirmed by the API, 749 rows in attendance_events"
+Test 8 - 500 users,Stored event belongs to the expected employee and action,PASS,0,,
+Test 8 - 500 users,No attendance rows the test did not create,PASS,0,,
+Test 8 - 500 users,Stored time equals the time the API returned,PASS,0,,
+Test 8 - 500 users,Stored time lies between the test's attendance request and its response,PASS,0,,
+Test 8 - 500 users,No duplicate check-in or check-out per employee,PASS,0,,379 employees with events
+Test 8 - 500 users,No two events inside the 120s duplicate window,PASS,0,,
+Test 8 - 500 users,Check-out is later than check-in,PASS,0,,
+Test 8 - 500 users,One day-summary row per employee and day,PASS,0,,
+Test 8 - 500 users,"Day summary agrees with the events (first in, last out, worked minutes, open flag)",PASS,0,,379 day rows
+Test 8 - 500 users,Day summaries exist only for employees with events,PASS,0,,
+Test 8 - 500 users,Verification log has a row for every verdict the test received,PASS,0,,"log 1494 / 62 (identified / rejected), test received 1492 / 62; 366 recognitions ended without an answer"
+Test 9 - 500 burst,Every API-confirmed event is stored,PASS,0,,"282 confirmed by the API, 282 rows in attendance_events"
+Test 9 - 500 burst,Stored event belongs to the expected employee and action,PASS,0,,
+Test 9 - 500 burst,No attendance rows the test did not create,PASS,0,,
+Test 9 - 500 burst,Stored time equals the time the API returned,PASS,0,,
+Test 9 - 500 burst,Stored time lies between the test's attendance request and its response,PASS,0,,
+Test 9 - 500 burst,No duplicate check-in or check-out per employee,PASS,0,,282 employees with events
+Test 9 - 500 burst,No two events inside the 120s duplicate window,PASS,0,,
+Test 9 - 500 burst,Check-out is later than check-in,PASS,0,,
+Test 9 - 500 burst,One day-summary row per employee and day,PASS,0,,
+Test 9 - 500 burst,"Day summary agrees with the events (first in, last out, worked minutes, open flag)",PASS,0,,282 day rows
+Test 9 - 500 burst,Day summaries exist only for employees with events,PASS,0,,
+Test 9 - 500 burst,Verification log has a row for every verdict the test received,PASS,0,,"log 282 / 15 (identified / rejected), test received 282 / 15; 203 recognitions ended without an answer"
+Test 10 - 500 sustained,Every API-confirmed event is stored,PASS,0,,"486 confirmed by the API, 486 rows in attendance_events"
+Test 10 - 500 sustained,Stored event belongs to the expected employee and action,PASS,0,,
+Test 10 - 500 sustained,No attendance rows the test did not create,PASS,0,,
+Test 10 - 500 sustained,Stored time equals the time the API returned,PASS,0,,
+Test 10 - 500 sustained,Stored time lies between the test's attendance request and its response,PASS,0,,
+Test 10 - 500 sustained,No duplicate check-in or check-out per employee,PASS,0,,486 employees with events
+Test 10 - 500 sustained,No two events inside the 120s duplicate window,PASS,0,,
+Test 10 - 500 sustained,Check-out is later than check-in,PASS,0,,
+Test 10 - 500 sustained,One day-summary row per employee and day,PASS,0,,
+Test 10 - 500 sustained,"Day summary agrees with the events (first in, last out, worked minutes, open flag)",PASS,0,,486 day rows
+Test 10 - 500 sustained,Day summaries exist only for employees with events,PASS,0,,
+Test 10 - 500 sustained,Verification log has a row for every verdict the test received,PASS,0,,"log 3431 / 824 (identified / rejected), test received 3431 / 824; 8967 recognitions ended without an answer"
+Liveness gate,Every API-confirmed event is stored,PASS,0,,"0 confirmed by the API, 0 rows in attendance_events"
+Liveness gate,Stored event belongs to the expected employee and action,PASS,0,,
+Liveness gate,No attendance rows the test did not create,PASS,0,,
+Liveness gate,Stored time equals the time the API returned,PASS,0,,
+Liveness gate,Stored time lies between the test's attendance request and its response,PASS,0,,
+Liveness gate,No duplicate check-in or check-out per employee,PASS,0,,0 employees with events
+Liveness gate,No two events inside the 120s duplicate window,PASS,0,,
+Liveness gate,Check-out is later than check-in,PASS,0,,
+Liveness gate,One day-summary row per employee and day,PASS,0,,
+Liveness gate,"Day summary agrees with the events (first in, last out, worked minutes, open flag)",PASS,0,,0 day rows
+Liveness gate,Day summaries exist only for employees with events,PASS,0,,
+Liveness gate,Verification log has a row for every verdict the test received,PASS,0,,"log 29 / 16 (identified / rejected), test received 29 / 16; 15 recognitions ended without an answer"

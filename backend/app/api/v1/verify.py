@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from datetime import date
 
@@ -9,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.deps import get_current_user, require_staff
 from app.core.rate_limit import client_ip, limit, verify_session_limiter
 from app.core.security import create_access_token, create_verification_token, decode_token
@@ -22,6 +24,7 @@ from app.vision.pipeline import get_pipeline
 from app.services.audit import audit
 
 router = APIRouter(prefix="/verify", tags=["verify"])
+log = logging.getLogger("facegate")
 
 
 @router.post("/sessions", dependencies=[Depends(limit(verify_session_limiter))])
@@ -65,9 +68,12 @@ async def create_enrolment_session(request: Request, employee_id: str, consent: 
 
 async def _record_attempt(result: dict, s, purpose: str) -> str | None:
     outcome_map = {"identified": VerificationOutcome.identified, "unknown": VerificationOutcome.unknown, "ambiguous": VerificationOutcome.ambiguous,
-                   "spoof": VerificationOutcome.spoof, "challenge_failed": VerificationOutcome.challenge_failed, "timeout": VerificationOutcome.timeout,
+                   "spoof": VerificationOutcome.spoof, "replay": VerificationOutcome.spoof, "challenge_failed": VerificationOutcome.challenge_failed, "timeout": VerificationOutcome.timeout,
                    "inconsistent": VerificationOutcome.quality, "no_face": VerificationOutcome.no_face, "multiple_faces": VerificationOutcome.multiple_faces}
     key = "identified" if result.get("state") == "identified" else result.get("reason", "quality")
+    # Both anti-spoofing scores in the log for every verdict, so thresholds can be tuned from real scans.
+    log.info("verify %s: outcome=%s match=%s liveness=%s replay_real=%s frames=%s policy=%s", purpose, key, result.get("match_score"),
+             result.get("liveness_score"), result.get("replay_score"), s.frames, s.liveness_policy)
     async with SessionLocal() as db:
         att = VerificationAttempt(
             session_id=s.id, purpose=purpose, outcome=outcome_map.get(key, VerificationOutcome.quality), employee_id=result.get("employee_id"),
@@ -140,14 +146,21 @@ async def stream(ws: WebSocket, session_id: str):
             if not manager.rate_ok(s):
                 await ws.send_json({"state": "throttled", "frame": s.frames})  # the client waits for a reply per frame; never drop silently
                 continue
-            if pipe.busy:
+            # Wait briefly for a slot in the inference pool rather than answering "busy" at once: the kiosk sends its
+            # next frame as soon as this one is answered, so holding the reply is what stops a queue of waiting kiosks
+            # from flooding the server with frames it would only discard. Sessions that already hold evidence go first.
+            permit = await pipe.admit(priority=len(s.embeddings), timeout=settings.busy_hold_seconds)
+            if permit is None:
                 await ws.send_json({"state": "busy", "guidance": "The system is busy — hold still", "frame": s.frames})
                 continue
-            bgr = await pipe.decode_async(data)
-            if bgr is None:
-                await ws.send_json({"state": "error", "message": "Bad frame"})
-                continue
-            resp = await manager.process_attendance_frame(s, bgr)
+            try:
+                bgr = await pipe.decode_async(data)
+                if bgr is None:
+                    await ws.send_json({"state": "error", "message": "Bad frame"})
+                    continue
+                resp = await manager.process_attendance_frame(s, bgr, permit)
+            finally:
+                permit.release()
             await _enrich_others(s, resp)
             if s.done and s.result:
                 att_id = await _record_attempt(s.result, s, "attendance")

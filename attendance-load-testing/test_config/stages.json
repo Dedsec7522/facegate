@@ -1,0 +1,23 @@
+{
+  "_comment": "Run by tools/run_suite.py in this order. Every stage starts from the same database baseline (500 enrolled employees, no attendance).",
+  "stages": [
+    {"name": "Accuracy pass", "scenario": "accuracy", "users": 8, "spawn_rate": 8, "timeout_s": 1500,
+     "settings": {"adaptive_templates": false},
+     "note": "Every probe photo once at low load, so the verdict reflects the model and not queueing. Adaptive templates are switched off (an admin setting) so no probe is ever added to the gallery it is tested against."},
+    {"name": "Test 1 - 1 user", "scenario": "attendance", "users": 1, "spawn_rate": 1, "timeout_s": 400},
+    {"name": "Test 2 - 10 users", "scenario": "attendance", "users": 10, "spawn_rate": 10, "timeout_s": 500},
+    {"name": "Test 3 - 50 users", "scenario": "attendance", "users": 50, "spawn_rate": 25, "timeout_s": 600},
+    {"name": "Test 4 - 100 users", "scenario": "attendance", "users": 100, "spawn_rate": 50, "timeout_s": 800},
+    {"name": "Test 5 - 200 users", "scenario": "attendance", "users": 200, "spawn_rate": 100, "timeout_s": 1000},
+    {"name": "Test 6 - 300 users", "scenario": "attendance", "users": 300, "spawn_rate": 150, "timeout_s": 1300},
+    {"name": "Test 7 - 400 users", "scenario": "attendance", "users": 400, "spawn_rate": 200, "timeout_s": 1600},
+    {"name": "Test 8 - 500 users", "scenario": "attendance", "users": 500, "spawn_rate": 250, "timeout_s": 1900},
+    {"name": "Test 9 - 500 burst", "scenario": "burst", "users": 500, "spawn_rate": 250, "timeout_s": 900,
+     "note": "All 500 employees are held at a gate and released at the same instant."},
+    {"name": "Test 10 - 500 sustained", "scenario": "sustained", "users": 500, "spawn_rate": 250, "hold_seconds": 600, "timeout_s": 1000,
+     "note": "Ten minutes of repeated scans by 500 employees, one in ten by a person who is not enrolled."},
+    {"name": "Liveness gate", "scenario": "liveness", "users": 20, "spawn_rate": 20, "timeout_s": 600,
+     "settings": {"kiosk_liveness": "passive"},
+     "note": "The same photographs against the kiosk's passive anti-spoofing policy. They are photographs, so refusing them is the correct behaviour."}
+  ]
+}

@@ -1,0 +1,11 @@
+Stage,Concurrent users,Peak recognitions in flight,Total requests,Successful,Failed,Recognitions,Correct,Wrong identity,Rejected,No verdict,Attendance stored,Duplicates refused,Attendance: no answer,Attendance: server error (5xx),Attendance: wrong answer,Median ms to a correct match,P95 ms to a correct match,P99 ms to a correct match,P95 ms all attempts,Requests/s,CPU % avg,CPU % max,RAM % avg,Duration s,Result,Why
+Test 1 - 1 user,1,1,32,32,0,4,4,0,0,0,2,2,0,0,0,946.9,1162.4,1176.0,1162.4,0.25,95.8,100.0,93.0,140.8,PASS,
+Test 2 - 10 users,10,10,386,386,0,40,39,0,1,0,20,19,0,0,0,1092.9,2524.4,3825.2,2658.0,2.85,59.0,99.8,93.5,135.8,FAIL,p95 > 2000 ms
+Test 3 - 50 users,50,50,2129,2129,0,196,189,0,7,0,96,93,0,0,0,2614.9,12238.5,14750.2,12683.0,14.06,61.9,100.0,93.9,154.8,FAIL,p95 > 2000 ms
+Test 4 - 100 users,100,100,6610,6608,2,392,371,0,21,0,187,182,2,0,0,5430.7,17701.3,20254.0,18169.5,40.18,62.3,99.2,93.7,174.3,FAIL,"requests without an answer / timeouts / server errors, p95 > 2000 ms"
+Test 5 - 200 users,200,200,17113,17105,8,775,736,0,39,0,372,356,8,0,0,8125.9,36332.1,45468.0,37083.1,88.33,73.2,98.1,95.4,198.8,FAIL,"requests without an answer / timeouts / server errors, p95 > 2000 ms"
+Test 6 - 300 users,300,189,21780,21740,40,1169,1074,0,58,37,543,528,3,0,0,14929.1,47862.2,60849.3,48699.2,91.5,77.0,98.1,95.3,242.8,FAIL,"requests without an answer / timeouts / server errors, p95 > 2000 ms"
+Test 7 - 400 users,400,185,23728,23470,258,1493,1181,0,54,258,599,582,0,0,0,15167.3,48898.4,67655.4,48687.7,102.67,77.8,99.8,96.1,239.0,FAIL,"requests without an answer / timeouts / server errors, p95 > 2000 ms"
+Test 8 - 500 users,500,333,48852,48481,371,1920,1492,0,70,358,749,730,11,2,0,17356.8,78038.9,103393.4,77458.6,179.39,84.3,100.0,94.3,277.7,FAIL,"requests without an answer / timeouts / server errors, p95 > 2000 ms"
+Test 9 - 500 burst,500,299,30634,30435,199,500,282,0,19,199,282,0,0,0,0,47231.2,64875.9,65843.3,64334.9,372.33,97.8,100.0,89.2,88.6,FAIL,"requests without an answer / timeouts / server errors, p95 > 2000 ms"
+Test 10 - 500 sustained,500,469,277675,266959,10716,13222,3843,8,415,8956,486,1446,1491,0,0,42160.3,75448.6,84667.9,67606.7,436.52,98.0,100.0,91.0,644.0,FAIL,"integrity, requests without an answer / timeouts / server errors, p95 > 2000 ms"

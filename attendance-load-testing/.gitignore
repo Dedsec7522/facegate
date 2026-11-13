@@ -1,0 +1,8 @@
+# Biometric test images and raw run output never go into version control.
+.venv/
+test_datasets/faces/
+test_results/
+__pycache__/
+reports_before_fix/
+reports/predictions_all.csv
+test_datasets/enrolled.json

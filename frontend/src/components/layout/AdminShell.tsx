@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
-import { BarChart3, CalendarCheck2, LayoutDashboard, LogOut, Menu, ScanFace, Settings, ShieldCheck, Users, X } from 'lucide-react'
+import { Activity, BarChart3, CalendarCheck2, LayoutDashboard, LogOut, Menu, ScanFace, Settings, ShieldCheck, Users, X } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/cn'
 import { pageVariants, spring } from '../../lib/motion'
@@ -15,6 +15,7 @@ const nav = [
   { to: '/admin/attendance', label: 'Attendance', icon: CalendarCheck2 },
   { to: '/admin/reports', label: 'Reports', icon: BarChart3 },
   { to: '/admin/settings', label: 'Settings & Security', icon: Settings },
+  { to: '/admin/load-test', label: 'Locust load test', icon: Activity },
 ]
 
 export function AdminShell() {

@@ -5,7 +5,7 @@ FaceGate identifies enrolled employees from a live camera, verifies they are phy
 | | |
 |---|---|
 | Backend | Python 3.12+, FastAPI (async), SQLAlchemy 2 + Alembic, PostgreSQL 16 |
-| Vision | OpenCV (YuNet detector, MIT), Intel `face-reidentification-retail-0095` embeddings (Apache-2.0) on OpenVINO, MiniFASNet liveness (Apache-2.0) on ONNX Runtime — CPU only. SFace (Apache-2.0) remains available as a fallback model |
+| Vision | OpenCV (YuNet detector, MIT), Intel `face-reidentification-retail-0095` embeddings (Apache-2.0) on OpenVINO, MiniFASNet liveness (Apache-2.0) and the Intel Open Model Zoo `anti-spoof-mn3` photo/screen detector (MIT) on ONNX Runtime — CPU only. SFace (Apache-2.0) remains available as a fallback model |
 | Frontend | React 19, TypeScript, Vite, Tailwind v4, Motion, Recharts |
 | Deployment | Docker Compose, Nginx TLS, nightly backups |
 
@@ -67,7 +67,7 @@ Set the **organisation time zone** once: *Settings → Attendance rules → Coun
 
 Checklist for a fresh machine / session: Docker Desktop running → `docker start facegate-pg` (or the `docker run` above) → API on 8000 → `npm run dev` on 5173 → sign in as `admin` / `Welcome123`.
 
-Models: all weights are committed in `backend/models/` — YuNet (`.onnx`), the Intel face-recognition model (`face-reidentification-retail-0095.xml` + `.bin`, OpenVINO IR, SHA-384 checked against the Open Model Zoo), SFace (`.onnx`, fallback) and MiniFASNet (`minifasnet_*.onnx`).
+Models: all weights are committed in `backend/models/` — YuNet (`.onnx`), the Intel face-recognition model (`face-reidentification-retail-0095.xml` + `.bin`, OpenVINO IR, SHA-384 checked against the Open Model Zoo), SFace (`.onnx`, fallback), MiniFASNet (`minifasnet_*.onnx`) and the replay detector `anti-spoof-mn3.onnx` (12 MB, SHA-384 checked against the Open Model Zoo).
 
 **Face model and re-enrolment.** `FACE_MODEL` selects the embedding model (`intel-fr-0095`, default, or `sface-2021dec`). Every enrolment records the model that produced its templates and only templates of the running model are loaded, so after changing the model (including upgrading from a release that used SFace) every employee must be **re-enrolled**; the API logs how many active enrolments are affected at start-up.
 
@@ -95,14 +95,14 @@ docker compose up -d
 
 | Role | Where | What |
 |---|---|---|
-| Employee | `/kiosk` | Start verification → identified in about a second → the one action the engine allows (Login or Logout) is recorded automatically after a 3 s countdown (tap to do it now, or *Not you? Cancel*). Bystanders in the frame are labelled with name and signed-in state but never recorded; a partially covered face (mask, scarf, cap over the eyes) is refused with an error. Optional admin-enabled PIN fallback. |
+| Employee | `/kiosk` | Start verification → identified in about a second → the one action the engine allows (Login or Logout) is recorded automatically after a 3 s countdown (tap to do it now, or *Not you? Cancel*). Bystanders in the frame are labelled with name and signed-in state but never recorded; a partially covered face (mask, scarf, cap over the eyes, one eye or one side hidden) is refused with an error, and a photo or phone screen held up to the camera is refused as "Photo or screen detected". In a dark room the screen lights a white border as a lamp. Optional admin-enabled PIN fallback. |
 | Employee | `/portal` | **Login from Office / Logout from Office** with a face check bound to the signed-in account (1:1 — only your own enrolled face can log your account in or out), today's times, a month **calendar** (green present, red absent, yellow leave), insights and the event timeline (needs an account: `seed.py --employee-logins` or *Employees → Create account*). |
 | Admin / HR | `/admin` | Dashboard, employees & departments, enrolment, live attendance board, corrections, reports & exports, settings, MFA, users, audit log. |
 
 ## 4. Tests and benchmarks
 
 ```bash
-cd backend && .venv/Scripts/python -m pytest -q                 # 27 tests: engine, vision, API, e2e stream, bound verification, session binding
+cd backend && .venv/Scripts/python -m pytest -q                 # 30 tests: engine, vision, API, e2e stream, bound verification, session binding, inference admission
 # vision + e2e tests need face images in backend/tests/data/synth_face_*.jpg (git-ignored; ≥ 3 different people, sharp at 640 px)
 .venv/Scripts/python benchmarks/latency.py                       # per-stage latency on this machine
 .venv/Scripts/python benchmarks/load_test.py --clients 300 --concurrency 10   # 300 sessions through 10 kiosks
@@ -130,7 +130,25 @@ locust -f benchmarks/locustfile.py --worker --host http://127.0.0.1:8000
 
 Results from the development machine are recorded in [docs/05-test-and-benchmark-results.md](docs/05-test-and-benchmark-results.md).
 
-Liveness policy is per channel (*Settings → Verification*): the signed-in portal defaults to **advisory** (instant, ~0.5 s), the anonymous kiosk to **passive** (anti-spoof gate with a head-turn only when unsure), and **strict** forces a head turn everywhere.
+**Full Locust suite with ground truth** lives in [`attendance-load-testing/`](attendance-load-testing/README.md): ten staged
+tests from 10 to 500 simultaneous employees, a 500-person burst, a sustained run, an accuracy pass and a liveness pass, each
+verdict compared with the known identity and every stored attendance row validated afterwards. It runs against its own API
+process (port 8010) and its own Postgres container, never the real data, and its live dashboard is embedded in the admin
+console under *Locust load test*. The report in `attendance-load-testing/reports/final_report.html` is from 12–13 Nov 2026 on
+the development laptop with about half the CPU taken by another process: only the 10-user stage met the 2 s p95 target, and
+the suite's verdict for that machine is **not ready** for hundreds of simultaneous kiosks. That run predates the replay
+detector and the stricter covering rules; re-run it on the production host.
+
+Liveness policy is per channel (*Settings → Verification*). Both channels default to **advisory** (instant, ~0.5 s; the
+MiniFASNet score is logged, not enforced); **passive** adds the anti-spoof gate with a head turn only when unsure; **strict**
+forces a head turn everywhere. Independently of the policy, the **replay detector** scores every frame and refuses a session
+that looks like a photo or a screen, with no extra frames and no head turn.
+
+Limits, stated plainly: the replay detector was measured on photographs (0.8 % of genuine LFW frames fall below 0.45) and has
+not yet been validated against live phone or print replays on a real camera; tune `REPLAY_SPOOF_THRESHOLD` from the logged
+`replay_real` scores. Partial covering is a colour heuristic: on synthetic covers it accepts 1–2 % of masked faces, 4–6 % with
+one eye covered, 14–16 % with half the face hidden, wrongly flags about 4 % of uncovered frames (the scan just uses the next
+frame), and does **not** catch a skin-coloured cover such as a hand over the mouth.
 
 ## 5. Configuration
 
@@ -144,6 +162,9 @@ All settings are environment variables (see `backend/.env.example`). Attendance 
 | `PAD_LIVE_THRESHOLD` | 0.45 | median live-probability that passes on passive evidence alone (typical live check ≈ 0.5–1 s) |
 | `PAD_SPOOF_THRESHOLD` | 0.20 | below this the session is rejected; between the two thresholds the server asks for a one-off head turn (step-up) |
 | `PAD_REJECT_MIN_FRAMES` | 14 | frames of evidence before a session is rejected as spoof |
+| `REPLAY_CHECK` | true | run the `anti-spoof-mn3` photo/screen detector on every frame (~7 ms) |
+| `REPLAY_SPOOF_THRESHOLD` | 0.30 | a session whose median "real face" probability is below this after `REPLAY_MIN_FRAMES` (3) frontal frames is rejected as `replay`, under every liveness policy |
+| `BUSY_HOLD_SECONDS` | 1.0 | how long a frame waits for a free inference slot before the server answers `busy` |
 | `INFERENCE_DEVICE` | cpu | CPU only — no GPU is used or required |
 | `INFERENCE_WORKERS` | 0 | bounded CPU inference pool; `0` = one worker per physical core |
 | `DETECT_MAX_SIDE` | 320 | two-stage detection: faces are found on a copy downscaled to this size, then landmarks are refined on a full-resolution crop around each face (coarse landmarks skew head pose and alignment); `0` = single full-resolution pass |
@@ -183,6 +204,7 @@ backend/   app/{api,core,db,schemas,services,vision}  alembic/  tests/  benchmar
 frontend/  src/{app,components,lib,pages}
 deploy/    docker-compose.yml  api.Dockerfile  web.Dockerfile  nginx/  .env.example
 docs/      01…07 design, security, results, licences, comparison
+attendance-load-testing/   Locust suite with ground truth, its own API instance and database (see its README)
 ```
 
 Licence of this application code: MIT (see `LICENSE`). Third-party model and package licences are listed in `docs/06-licences-and-dependencies.md`.

@@ -13,6 +13,7 @@ import { Card, CardBody, CardHeader } from '../../components/ui/Card'
 import { Dialog } from '../../components/ui/Dialog'
 import { Avatar, CountUp, EmptyState, PageHeader, Skeleton } from '../../components/ui/Misc'
 import { CameraStage, type StageMode } from '../../components/camera/CameraStage'
+import { FillLight, FillLightNote, useLowLightAssist } from '../../components/camera/FillLight'
 import { FrameAlerts } from '../../components/camera/FrameAlerts'
 import { useCamera } from '../../components/camera/useCamera'
 import { useVerificationStream } from '../../components/camera/useVerificationStream'
@@ -32,6 +33,7 @@ const REASON_TEXT: Record<string, string> = {
   mismatch: 'This face does not match the face enrolled for your account. Only you can log in or out from your own portal.',
   not_enrolled: 'Your account has no enrolled face yet. Ask an administrator to enrol you.',
   spoof: 'Liveness check failed. Please use the live camera — not a photo or a screen.',
+  replay: 'This looks like a photo or a screen, not a live face. Show your own face to the camera.',
   challenge_failed: 'The head-turn check was not completed. Please try again and follow the instruction.',
   timeout: 'Verification timed out. Please try again.',
   inconsistent: 'The face changed during verification. Please try again with only you in view.',
@@ -405,6 +407,7 @@ function VerifyDialog({ open, action, employeeName, onClose, onRecorded }: { ope
 
   const retry = () => { setPhase('verify'); setResult(null); setError(null); void start() }
   const fb = stream.feedback
+  const fillLight = useLowLightAssist(fb, open && phase === 'verify', cam)
   const stageMode: StageMode = phase === 'done' ? 'success' : phase === 'failed' ? 'failure' : 'scanning'
   const title = action === 'check_in' ? 'Login from Office' : 'Logout from Office'
 
@@ -420,6 +423,7 @@ function VerifyDialog({ open, action, employeeName, onClose, onRecorded }: { ope
 
   return (
     <Dialog open={open} onClose={onClose} title={title} description={`Face verification for ${employeeName}'s account only`} size="lg">
+      <FillLight on={fillLight} />
       <div className="grid gap-4 sm:grid-cols-[1.2fr_1fr]">
         <div className="theme-dark"><CameraStage videoRef={cam.videoRef} status={cam.status} error={cam.error} feedback={phase === 'verify' ? fb : null} mode={stageMode} sentSize={stream.sentSize} className="aspect-[4/3]" /></div>
         <div className="flex min-h-[220px] flex-col">
@@ -435,6 +439,7 @@ function VerifyDialog({ open, action, employeeName, onClose, onRecorded }: { ope
                     </li>
                   ))}
                 </ul>
+                <FillLightNote on={fillLight} className="mt-4" />
                 <FrameAlerts fb={phase === 'verify' ? fb : null} subject="your own face" className="mt-4" />
               </motion.div>
             )}

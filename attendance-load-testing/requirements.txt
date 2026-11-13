@@ -1,0 +1,7 @@
+locust>=2.40
+websocket-client
+opencv-python-headless
+numpy
+psutil
+psycopg[binary]
+requests
